@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#0F2E4C" />
+<title>Kavi & Magi School Diary</title>
+
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="favicon-192x192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js" crossorigin></script>
+<script src="https://cdn.tailwindcss.com"></script>
+
+<style>
+  html, body, #root { height: 100%; margin: 0; }
+  body { font-family: 'Inter', system-ui, sans-serif; background:#F5F8F8; }
+  .font-display { font-family: 'Poppins', system-ui, sans-serif; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-thumb { background: #C7D4D6; border-radius: 3px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo, useRef } = React;
+
+/* ============ Brand tokens — matched to physiorehabuk.com (navy / teal editorial clinical style) ============ */
+const NAVY = "#0F2E4C";       // deep clinical navy (site header/hero)
+const NAVY_SOFT = "#1B4A73";
+const TEAL = "#1E8F73";       // recovery-green/teal accent (site CTAs)
+const TEAL_DARK = "#166B57";
+const PAPER = "#F5F8F8";
+const INK = "#1C2B33";
+const MUTED = "#5C6B71";
+const LINE = "#E3EAEA";
+
+/* Subject chip palette — soft tints, same family as the site's specialty chips (Sciatica / Whiplash etc.) */
+const SUBJECT_STYLES = {
+  Hindi:     { bg: "#FDECE3", fg: "#B7551E" },
+  English:   { bg: "#E4EEF7", fg: NAVY_SOFT },
+  Maths:     { bg: "#EAE6F7", fg: "#5A3F94" },
+  Science:   { bg: "#E1F3EC", fg: TEAL_DARK },
+  EVS:       { bg: "#E1F3EC", fg: TEAL_DARK },
+  SST:       { bg: "#FBF1DC", fg: "#8A6300" },
+  Sanskrit:  { bg: "#FBE6EF", fg: "#A32E6B" },
+  Computer:  { bg: "#DFF1F2", fg: "#1E6E77" },
+  GK:        { bg: "#ECE8F7", fg: "#5A3F94" },
+  Art:       { bg: "#FCE6EE", fg: "#A32E6B" },
+  PE:        { bg: "#E9F3DD", fg: "#4F7A21" },
+  General:   { bg: "#EDEFEF", fg: MUTED },
+};
+const KNOWN_SUBJECTS = Object.keys(SUBJECT_STYLES).filter(s => s !== "General");
+const styleFor = (s) => SUBJECT_STYLES[s] || SUBJECT_STYLES.General;
+
+/* ============ Date helpers ============ */
+const todayKey = (d = new Date()) => d.toISOString().slice(0, 10);
+const prettyDate = (key) => {
+  const d = new Date(key + "T00:00:00");
+  return d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
+};
+const addDays = (key, n) => { const d = new Date(key + "T00:00:00"); d.setDate(d.getDate() + n); return todayKey(d); };
+
+/* ============ WhatsApp text parser ============ */
+function parseWhatsAppText(raw) {
+  const lines = raw.split(/\r?\n/)
+    .map(l => l.replace(/^\[?\d{1,2}\/\d{1,2}\/\d{2,4},?\s?\d{1,2}:\d{2}.*?\]?\s?-?\s?.*?:\s?/i, ""))
+    .map(l => l.trim())
+    .filter(l => l.length > 0 && !/^(good morning|gm|please do|regards|thank you|thanks)$/i.test(l));
+  const items = [];
+  for (const line of lines) {
+    const match = line.match(/^([A-Za-z][A-Za-z .]{1,20}?)\s*[:\-–]\s*(.+)$/);
+    if (match) {
+      const rawSubject = match[1].trim();
+      const found = KNOWN_SUBJECTS.find(s =>
+        s.toLowerCase() === rawSubject.toLowerCase() ||
+        (s === "SST" && /social/i.test(rawSubject)) ||
+        (s === "Maths" && /math/i.test(rawSubject))
+      );
+      items.push({ subject: found || "General", text: match[2].trim() });
+    } else {
+      items.push({ subject: "General", text: line });
+    }
+  }
+  return items;
+}
+
+/* ============ Storage (real browser localStorage — works on GitHub Pages) ============ */
+function loadJSON(key, fallback) {
+  try { const raw = window.localStorage.getItem(`kavi-magi:${key}`); return raw ? JSON.parse(raw) : fallback; }
+  catch { return fallback; }
+}
+function saveJSON(key, value) {
+  try { window.localStorage.setItem(`kavi-magi:${key}`, JSON.stringify(value)); } catch (e) { console.error(e); }
+}
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
+
+/* ============ Minimal inline icon set (no external icon dependency) ============ */
+const Icon = {
+  book: (p) => <svg viewBox="0 0 24 24" width={p.size||18} height={p.size||18} fill="none" stroke={p.color||"currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>,
+  calendar: (p) => <svg viewBox="0 0 24 24" width={p.size||18} height={p.size||18} fill="none" stroke={p.color||"currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>,
+  chat: (p) => <svg viewBox="0 0 24 24" width={p.size||18} height={p.size||18} fill="none" stroke={p.color||"currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>,
+  user: (p) => <svg viewBox="0 0 24 24" width={p.size||18} height={p.size||18} fill="none" stroke={p.color||"currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0 1 16 0v1"/></svg>,
+  plus: (p) => <svg viewBox="0 0 24 24" width={p.size||18} height={p.size||18} fill="none" stroke={p.color||"currentColor"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>,
+  x: (p) => <svg viewBox="0 0 24 24" width={p.size||18} height={p.size||18} fill="none" stroke={p.color||"currentColor"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>,
+  check: (p) => <svg viewBox="0 0 24 24" width={p.size||18} height={p.size||18} fill="none" stroke={p.color||"currentColor"} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>,
+  chevronL: (p) => <svg viewBox="0 0 24 24" width={p.size||18} height={p.size||18} fill="none" stroke={p.color||"currentColor"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>,
+  chevronR: (p) => <svg viewBox="0 0 24 24" width={p.size||18} height={p.size||18} fill="none" stroke={p.color||"currentColor"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>,
+  trash: (p) => <svg viewBox="0 0 24 24" width={p.size||18} height={p.size||18} fill="none" stroke={p.color||"currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>,
+  clip: (p) => <svg viewBox="0 0 24 24" width={p.size||18} height={p.size||18} fill="none" stroke={p.color||"currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-3"/><path d="M9 12h6M9 16h6"/></svg>,
+};
+
+/* Emblem — echoes the site's badge-style logo mark */
+function Emblem({ size = 44 }) {
+  return (
+    <div className="rounded-full flex items-center justify-center shrink-0"
+      style={{ width: size, height: size, background: `linear-gradient(135deg, ${TEAL}, ${TEAL_DARK})`, boxShadow: "0 2px 8px rgba(30,143,115,0.35)" }}>
+      <span className="font-display font-extrabold text-white" style={{ fontSize: size * 0.36 }}>K·M</span>
+    </div>
+  );
+}
+
+function App() {
+  const [tab, setTab] = useState("today");
+  const [profile, setProfile] = useState(null);
+  const [entries, setEntries] = useState({});
+  const [selectedDate, setSelectedDate] = useState(todayKey());
+  const [loaded, setLoaded] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [showProfileForm, setShowProfileForm] = useState(false);
+
+  useEffect(() => {
+    const p = loadJSON("profile", null);
+    const e = loadJSON("entries", {});
+    setProfile(p); setEntries(e); setShowProfileForm(!p); setLoaded(true);
+  }, []);
+
+  const persistEntries = (next) => { setEntries(next); saveJSON("entries", next); };
+  const dayData = entries[selectedDate] || { tasks: [] };
+
+  const addTasks = (newTasks, dateKey = selectedDate) => {
+    const existing = entries[dateKey] || { tasks: [] };
+    persistEntries({ ...entries, [dateKey]: { ...existing, tasks: [...existing.tasks, ...newTasks] } });
+  };
+  const toggleTask = (dateKey, id) => {
+    const existing = entries[dateKey]; if (!existing) return;
+    persistEntries({ ...entries, [dateKey]: { ...existing, tasks: existing.tasks.map(t => t.id === id ? { ...t, done: !t.done } : t) } });
+  };
+  const deleteTask = (dateKey, id) => {
+    const existing = entries[dateKey]; if (!existing) return;
+    persistEntries({ ...entries, [dateKey]: { ...existing, tasks: existing.tasks.filter(t => t.id !== id) } });
+  };
+  const saveProfile = (p) => { setProfile(p); saveJSON("profile", p); setShowProfileForm(false); };
+
+  const historyDates = useMemo(() =>
+    Object.keys(entries).filter(k => (entries[k].tasks || []).length > 0).sort((a, b) => (a < b ? 1 : -1)),
+  [entries]);
+
+  if (!loaded) {
+    return <div className="min-h-screen flex items-center justify-center" style={{ background: PAPER }}>
+      <div className="flex flex-col items-center gap-3">
+        <Emblem size={52} />
+        <p className="text-sm" style={{ color: MUTED }}>Opening your diary…</p>
+      </div>
+    </div>;
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col" style={{ background: PAPER, color: INK }}>
+      {/* Header — echoes the site's dark navy top bar */}
+      <header className="sticky top-0 z-20 px-4 pt-5 pb-6" style={{ background: `linear-gradient(135deg, ${NAVY} 0%, ${NAVY_SOFT} 100%)` }}>
+        <div className="max-w-xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Emblem />
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.18em] font-bold" style={{ color: "#8FB8CE" }}>Kavi &amp; Magi</p>
+              <h1 className="font-display font-bold text-lg leading-tight text-white -mt-0.5">
+                {profile ? `Hi, ${profile.name.split(" ")[0]}` : "School Diary"}
+              </h1>
+              {profile && (
+                <span className="inline-block mt-1 text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "rgba(255,255,255,0.12)", color: "#CFE3EC" }}>
+                  Class {profile.className}{profile.section ? `-${profile.section}` : ""}
+                </span>
+              )}
+            </div>
+          </div>
+          <button onClick={() => setShowProfileForm(true)}
+            className="w-10 h-10 rounded-full flex items-center justify-center active:scale-90 transition"
+            style={{ background: "rgba(255,255,255,0.12)" }} aria-label="Edit profile">
+            <Icon.user size={18} color="#fff" />
+          </button>
+        </div>
+      </header>
+
+      <main className="flex-1 overflow-y-auto px-4 pt-5 pb-28 max-w-xl w-full mx-auto">
+        {tab === "today" && (
+          <TodayView selectedDate={selectedDate} setSelectedDate={setSelectedDate} dayData={dayData}
+            onToggle={(id) => toggleTask(selectedDate, id)} onDelete={(id) => deleteTask(selectedDate, id)}
+            onAdd={() => setShowAdd(true)} onImport={() => setShowImport(true)} />
+        )}
+        {tab === "diary" && (
+          <DiaryView historyDates={historyDates} entries={entries} onOpen={(k) => { setSelectedDate(k); setTab("today"); }} />
+        )}
+      </main>
+
+      {/* Bottom nav */}
+      <nav className="fixed bottom-0 inset-x-0 z-20 bg-white px-6" style={{ borderTop: `1px solid ${LINE}`, boxShadow: "0 -4px 16px rgba(15,46,76,0.06)" }}>
+        <div className="max-w-xl mx-auto flex justify-around py-2.5">
+          <NavBtn icon={<Icon.book size={20} />} label="Today" active={tab === "today"} onClick={() => setTab("today")} />
+          <NavBtn icon={<Icon.calendar size={20} />} label="Diary" active={tab === "diary"} onClick={() => setTab("diary")} />
+          <NavBtn icon={<Icon.chat size={20} />} label="Import" onClick={() => setShowImport(true)} />
+        </div>
+      </nav>
+
+      {tab === "today" && (
+        <button onClick={() => setShowAdd(true)}
+          className="fixed bottom-24 right-5 z-30 w-14 h-14 rounded-full text-white flex items-center justify-center active:scale-90 transition"
+          style={{ background: `linear-gradient(135deg, ${TEAL}, ${TEAL_DARK})`, boxShadow: "0 6px 16px rgba(30,143,115,0.4)" }} aria-label="Add task">
+          <Icon.plus size={24} />
+        </button>
+      )}
+
+      {showAdd && <AddTaskSheet onClose={() => setShowAdd(false)} onSave={(task) => { addTasks([task]); setShowAdd(false); }} />}
+      {showImport && <ImportSheet onClose={() => setShowImport(false)}
+        onConfirm={(tasks, dateKey) => { addTasks(tasks, dateKey); setShowImport(false); setSelectedDate(dateKey); setTab("today"); }}
+        defaultDate={selectedDate} />}
+      {showProfileForm && <ProfileSheet profile={profile} onClose={() => profile && setShowProfileForm(false)} onSave={saveProfile} />}
+    </div>
+  );
+}
+
+function NavBtn({ icon, label, active, onClick }) {
+  return (
+    <button onClick={onClick} className="flex flex-col items-center gap-1 px-3 py-1 active:scale-90 transition">
+      <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: active ? NAVY : "transparent", color: active ? "#fff" : "#9AA6AB" }}>{icon}</div>
+      <span className="text-[10px] font-bold" style={{ color: active ? NAVY : "#9AA6AB" }}>{label}</span>
+    </button>
+  );
+}
+
+/* Numbered step badge — echoes the site's "01 / 02 / 03" step markers */
+function StepBadge({ n }) {
+  return <span className="font-display font-extrabold text-2xl" style={{ color: TEAL, opacity: 0.35 }}>{String(n).padStart(2,"0")}</span>;
+}
+
+function TodayView({ selectedDate, setSelectedDate, dayData, onToggle, onDelete, onAdd, onImport }) {
+  const tasks = dayData.tasks || [];
+  const doneCount = tasks.filter(t => t.done).length;
+  const pct = tasks.length ? Math.round((doneCount / tasks.length) * 100) : 0;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <button onClick={() => setSelectedDate(addDays(selectedDate, -1))} className="w-10 h-10 rounded-full bg-white flex items-center justify-center active:scale-90" style={{ border: `1px solid ${LINE}` }}>
+          <Icon.chevronL color={NAVY} />
+        </button>
+        <div className="text-center">
+          <p className="font-display font-bold" style={{ color: NAVY }}>{prettyDate(selectedDate)}</p>
+          {selectedDate !== todayKey() && (
+            <button onClick={() => setSelectedDate(todayKey())} className="text-[11px] font-bold" style={{ color: TEAL }}>Jump to today</button>
+          )}
+        </div>
+        <button onClick={() => setSelectedDate(addDays(selectedDate, 1))} className="w-10 h-10 rounded-full bg-white flex items-center justify-center active:scale-90" style={{ border: `1px solid ${LINE}` }}>
+          <Icon.chevronR color={NAVY} />
+        </button>
+      </div>
+
+      {tasks.length > 0 && (
+        <div className="bg-white rounded-2xl p-4 mb-4 flex items-center gap-4" style={{ border: `1px solid ${LINE}` }}>
+          <div className="relative w-16 h-16 shrink-0">
+            <svg viewBox="0 0 36 36" className="w-16 h-16 -rotate-90">
+              <circle cx="18" cy="18" r="15.5" fill="none" stroke="#EAF0F0" strokeWidth="4.5" />
+              <circle cx="18" cy="18" r="15.5" fill="none" stroke={TEAL} strokeWidth="4.5" strokeDasharray={`${pct}, 100`} strokeLinecap="round" style={{ transition: "stroke-dasharray .4s ease" }} />
+            </svg>
+            <span className="absolute inset-0 flex items-center justify-center font-display font-extrabold text-sm" style={{ color: NAVY }}>{pct}%</span>
+          </div>
+          <div>
+            <p className="font-display font-bold text-sm" style={{ color: INK }}>{doneCount} of {tasks.length} complete</p>
+            <p className="text-xs mt-0.5" style={{ color: MUTED }}>Tap a task to mark it done</p>
+          </div>
+        </div>
+      )}
+
+      {tasks.length === 0 ? (
+        <div className="bg-white rounded-2xl p-8 text-center" style={{ border: `1px solid ${LINE}` }}>
+          <Emblem size={48} />
+          <p className="font-display font-bold mt-3" style={{ color: NAVY }}>Nothing logged yet</p>
+          <p className="text-sm mt-1 mb-5" style={{ color: MUTED }}>Paste today's WhatsApp class message, or add a task by hand.</p>
+          <div className="flex gap-2 justify-center flex-wrap">
+            <button onClick={onImport} className="px-4 py-2.5 rounded-full text-white text-sm font-bold flex items-center gap-1.5" style={{ background: NAVY }}>
+              <Icon.clip size={15} /> Import
+            </button>
+            <button onClick={onAdd} className="px-4 py-2.5 rounded-full text-sm font-bold flex items-center gap-1.5" style={{ background: "#E1F3EC", color: TEAL_DARK }}>
+              <Icon.plus size={15} /> Add task
+            </button>
+          </div>
+        </div>
+      ) : (
+        <ul className="space-y-2.5">
+          {tasks.map(t => {
+            const s = styleFor(t.subject);
+            return (
+              <li key={t.id} className="bg-white rounded-xl px-3 py-3 flex items-center gap-3 transition hover:shadow-md"
+                style={{ border: `1px solid ${LINE}` }}>
+                <button onClick={() => onToggle(t.id)}
+                  className="w-6 h-6 rounded-md flex items-center justify-center shrink-0 border-2 transition"
+                  style={{ background: t.done ? TEAL : "#fff", borderColor: t.done ? TEAL : "#D5DEDF" }}>
+                  {t.done && <Icon.check size={13} color="#fff" />}
+                </button>
+                <span className="text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0" style={{ background: s.bg, color: s.fg }}>{t.subject}</span>
+                <span className={`text-sm flex-1 ${t.done ? "line-through" : ""}`} style={{ color: t.done ? "#B7BFC1" : INK }}>{t.text}</span>
+                <button onClick={() => onDelete(t.id)} className="shrink-0 active:scale-90" style={{ color: "#C7CFD1" }}><Icon.trash size={16} /></button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function DiaryView({ historyDates, entries, onOpen }) {
+  return (
+    <div>
+      <h2 className="font-display font-bold mb-3 text-lg" style={{ color: NAVY }}>Past entries</h2>
+      {historyDates.length === 0 ? (
+        <div className="bg-white rounded-2xl p-8 text-center" style={{ border: `1px solid ${LINE}` }}>
+          <Icon.calendar size={26} color={NAVY} />
+          <p className="text-sm mt-2" style={{ color: MUTED }}>Your logged days will show up here.</p>
+        </div>
+      ) : (
+        <ul className="space-y-2.5">
+          {historyDates.map(k => {
+            const d = entries[k]; const total = d.tasks.length; const done = d.tasks.filter(t => t.done).length;
+            const complete = total > 0 && done === total;
+            return (
+              <li key={k}>
+                <button onClick={() => onOpen(k)} className="w-full bg-white rounded-xl px-4 py-3.5 flex items-center justify-between transition hover:shadow-md" style={{ border: `1px solid ${LINE}` }}>
+                  <span className="font-semibold text-sm" style={{ color: INK }}>{prettyDate(k)}</span>
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: complete ? "#E1F3EC" : "#FBF1DC", color: complete ? TEAL_DARK : "#8A6300" }}>
+                    {done}/{total} done {complete ? "✓" : ""}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function Sheet({ title, children, onClose, dismissable = true }) {
+  return (
+    <div className="fixed inset-0 z-40 flex items-end sm:items-center sm:justify-center" style={{ background: "rgba(15,46,76,0.55)" }}>
+      <div className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl p-5 max-h-[88vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-display font-bold text-lg" style={{ color: NAVY }}>{title}</h3>
+          {dismissable && (
+            <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center active:scale-90" style={{ background: PAPER }}>
+              <Icon.x size={16} color={NAVY} />
+            </button>
+          )}
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function AddTaskSheet({ onClose, onSave }) {
+  const [subject, setSubject] = useState("General");
+  const [text, setText] = useState("");
+  return (
+    <Sheet onClose={onClose} title="Add a task">
+      <label className="text-xs font-bold mb-1.5 block uppercase tracking-wide" style={{ color: MUTED }}>Subject</label>
+      <div className="flex flex-wrap gap-2 mb-4">
+        {["General", ...KNOWN_SUBJECTS].map(s => {
+          const st = styleFor(s); const active = subject === s;
+          return <button key={s} onClick={() => setSubject(s)} className="text-xs font-bold px-3 py-1.5 rounded-full border-2 transition"
+            style={{ background: active ? st.bg : "#fff", color: st.fg, borderColor: active ? st.fg : LINE }}>{s}</button>;
+        })}
+      </div>
+      <label className="text-xs font-bold mb-1.5 block uppercase tracking-wide" style={{ color: MUTED }}>What is it?</label>
+      <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3}
+        placeholder="e.g. Complete worksheet page 12, questions 1-5"
+        className="w-full rounded-xl p-3 text-sm mb-4 focus:outline-none"
+        style={{ border: `2px solid ${LINE}` }} />
+      <button disabled={!text.trim()} onClick={() => onSave({ id: uid(), subject, text: text.trim(), done: false })}
+        className="w-full py-3.5 rounded-xl text-white font-display font-bold disabled:opacity-40"
+        style={{ background: NAVY }}>Save task</button>
+    </Sheet>
+  );
+}
+
+function ImportSheet({ onClose, onConfirm, defaultDate }) {
+  const [raw, setRaw] = useState("");
+  const [parsed, setParsed] = useState(null);
+  const [dateKey, setDateKey] = useState(defaultDate);
+  const taRef = useRef(null);
+
+  const doParse = () => { if (!raw.trim()) return; setParsed(parseWhatsAppText(raw).map(it => ({ ...it, id: uid(), include: true, done: false }))); };
+  const toggleInclude = (id) => setParsed(parsed.map(p => p.id === id ? { ...p, include: !p.include } : p));
+  const updateSubject = (id, subject) => setParsed(parsed.map(p => p.id === id ? { ...p, subject } : p));
+  const handlePasteClick = async () => {
+    try { const clip = await navigator.clipboard.readText(); if (clip) setRaw(clip); } catch { taRef.current?.focus(); }
+  };
+
+  return (
+    <Sheet onClose={onClose} title="Import from WhatsApp">
+      {!parsed ? (
+        <>
+          <p className="text-xs mb-2 leading-relaxed" style={{ color: MUTED }}>Open your class WhatsApp group, copy the homework/notice message, then paste it below.</p>
+          <div className="flex justify-end mb-1">
+            <button onClick={handlePasteClick} className="text-xs font-bold flex items-center gap-1" style={{ color: NAVY }}>
+              <Icon.clip size={13} /> Paste from clipboard
+            </button>
+          </div>
+          <textarea ref={taRef} value={raw} onChange={(e) => setRaw(e.target.value)} rows={7}
+            placeholder={"Example:\nMaths: Do Ex 4.2 Q1-5\nHindi - व्याकरण पेज 20\nPTM on Friday 10am"}
+            className="w-full rounded-xl p-3 text-sm mb-4 focus:outline-none" style={{ border: `2px solid ${LINE}` }} />
+          <button disabled={!raw.trim()} onClick={doParse} className="w-full py-3.5 rounded-xl text-white font-display font-bold disabled:opacity-40" style={{ background: NAVY }}>
+            Split into tasks
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="text-xs mb-3 leading-relaxed" style={{ color: MUTED }}>Review the tasks below — untick anything that isn't relevant, and fix a subject if needed.</p>
+          <div className="mb-3">
+            <label className="text-xs font-bold mb-1 block uppercase tracking-wide" style={{ color: MUTED }}>Add to date</label>
+            <input type="date" value={dateKey} onChange={(e) => setDateKey(e.target.value)} className="rounded-lg px-3 py-2 text-sm" style={{ border: `2px solid ${LINE}` }} />
+          </div>
+          <ul className="space-y-2 mb-4 max-h-64 overflow-y-auto pr-1">
+            {parsed.map(p => {
+              const s = styleFor(p.subject);
+              return (
+                <li key={p.id} className="rounded-xl p-3 transition" style={{ border: `2px solid ${LINE}`, background: p.include ? "#fff" : "#F5F8F8", opacity: p.include ? 1 : 0.55 }}>
+                  <div className="flex items-start gap-2">
+                    <button onClick={() => toggleInclude(p.id)} className="w-5 h-5 rounded-md flex items-center justify-center shrink-0 mt-0.5 border-2"
+                      style={{ background: p.include ? TEAL : "#fff", borderColor: p.include ? TEAL : "#D5DEDF" }}>
+                      {p.include && <Icon.check size={11} color="#fff" />}
+                    </button>
+                    <div className="flex-1">
+                      <select value={p.subject} onChange={(e) => updateSubject(p.id, e.target.value)}
+                        className="text-[11px] font-bold rounded-md px-1.5 py-0.5 mb-1 border-0" style={{ background: s.bg, color: s.fg }}>
+                        {["General", ...KNOWN_SUBJECTS].map(sub => <option key={sub} value={sub}>{sub}</option>)}
+                      </select>
+                      <p className="text-sm" style={{ color: INK }}>{p.text}</p>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="flex gap-2">
+            <button onClick={() => setParsed(null)} className="flex-1 py-3.5 rounded-xl font-display font-bold" style={{ background: "#E1F3EC", color: TEAL_DARK }}>Back</button>
+            <button onClick={() => onConfirm(parsed.filter(p => p.include).map(({ id, subject, text }) => ({ id, subject, text, done: false })), dateKey)}
+              className="flex-[2] py-3.5 rounded-xl text-white font-display font-bold" style={{ background: NAVY }}>
+              Add {parsed.filter(p => p.include).length} tasks
+            </button>
+          </div>
+        </>
+      )}
+    </Sheet>
+  );
+}
+
+function ProfileSheet({ profile, onClose, onSave }) {
+  const [name, setName] = useState(profile?.name || "");
+  const [className, setClassName] = useState(profile?.className || "1");
+  const [section, setSection] = useState(profile?.section || "");
+  return (
+    <Sheet onClose={onClose} title={profile ? "Edit profile" : "Welcome — let's set up"} dismissable={!!profile}>
+      {!profile && <div className="flex justify-center mb-4"><Emblem size={56} /></div>}
+      <label className="text-xs font-bold mb-1.5 block uppercase tracking-wide" style={{ color: MUTED }}>Student name</label>
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name"
+        className="w-full rounded-xl p-3 text-sm mb-4 focus:outline-none" style={{ border: `2px solid ${LINE}` }} />
+      <label className="text-xs font-bold mb-1.5 block uppercase tracking-wide" style={{ color: MUTED }}>Class</label>
+      <div className="grid grid-cols-5 gap-2 mb-4">
+        {Array.from({ length: 10 }, (_, i) => String(i + 1)).map(c => (
+          <button key={c} onClick={() => setClassName(c)} className="py-2 rounded-lg text-sm font-bold border-2 transition"
+            style={className === c ? { background: NAVY, color: "#fff", borderColor: NAVY } : { background: "#fff", color: NAVY, borderColor: LINE }}>{c}</button>
+        ))}
+      </div>
+      <label className="text-xs font-bold mb-1.5 block uppercase tracking-wide" style={{ color: MUTED }}>Section (optional)</label>
+      <input value={section} onChange={(e) => setSection(e.target.value.toUpperCase().slice(0, 1))} placeholder="e.g. A"
+        className="w-full rounded-xl p-3 text-sm mb-4 focus:outline-none" style={{ border: `2px solid ${LINE}` }} />
+      <button disabled={!name.trim()} onClick={() => onSave({ name: name.trim(), className, section: section.trim() })}
+        className="w-full py-3.5 rounded-xl text-white font-display font-bold disabled:opacity-40" style={{ background: NAVY }}>
+        Start my diary
+      </button>
+    </Sheet>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
