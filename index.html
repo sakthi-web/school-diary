@@ -32,7 +32,7 @@
 <body>
 <div id="root"></div>
 
-<script type="text/babel" data-presets="react">
+<script type="text/babel-source" id="app-source" data-presets="react">
 const { useState, useEffect, useMemo, useRef } = React;
 
 /* ============ Brand tokens — matched to physiorehabuk.com (navy / teal editorial clinical style) ============ */
@@ -505,6 +505,21 @@ function ProfileSheet({ profile, onClose, onSave }) {
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+
+<script>
+  // Manually compile the app source with the CLASSIC JSX runtime.
+  // (Babel's default "automatic" runtime injects an `import` statement, which
+  // throws in a plain <script> context with no module system — that was the
+  // cause of the blank page. Forcing "classic" makes it use React.createElement
+  // via the global `React`/`ReactDOM` already loaded above.)
+  const appSource = document.getElementById("app-source").textContent;
+  const compiled = Babel.transform(appSource, {
+    presets: [["react", { runtime: "classic" }]],
+  }).code;
+  const script = document.createElement("script");
+  script.textContent = compiled;
+  document.body.appendChild(script);
 </script>
 </body>
 </html>
