@@ -253,7 +253,7 @@ function FamilyCodeGate({ onReady }) {
         profiles: [], entries: {}, createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
       onReady(newCode);
-    } catch (e) { setError("Could not create family — check your Firebase setup."); setCreating(false); }
+    } catch (e) { console.error("Create family failed:", e); setError(`Could not create family — ${e.code || e.message || "check your Firebase setup"}.`); setCreating(false); }
   };
 
   const joinFamily = async () => {
@@ -264,7 +264,7 @@ function FamilyCodeGate({ onReady }) {
       const doc = await fbDb.collection("families").doc(code).get();
       if (!doc.exists) { setError("No family found with that code. Check it and try again."); setCreating(false); return; }
       onReady(code);
-    } catch (e) { setError("Something went wrong. Check your connection and try again."); setCreating(false); }
+    } catch (e) { console.error("Join family failed:", e); setError(`Something went wrong — ${e.code || e.message || "check your connection and try again"}.`); setCreating(false); }
   };
 
   return (
