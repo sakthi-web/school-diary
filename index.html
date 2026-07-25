@@ -21,11 +21,8 @@
 <script src="https://unpkg.com/@babel/standalone/babel.min.js" crossorigin></script>
 <script src="https://cdn.tailwindcss.com"></script>
 
-<!-- Firebase (compat build — plain global `firebase` namespace, no bundler needed) -->
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+<!-- Supabase (single UMD script, exposes global `supabase`) -->
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 
 <style>
   html, body, #root { height: 100%; margin: 0; }
@@ -40,19 +37,15 @@
 
 <!--
   ============================================================================
-  FIREBASE SETUP — fill this in with your own project's config, then commit.
-  Full step-by-step instructions are in FIREBASE_SETUP.md in this repo.
+  SUPABASE SETUP — fill this in with your own project's values, then commit.
+  Full step-by-step instructions are in SUPABASE_SETUP.md in this repo.
   Until this is filled in, the app runs in local-only mode automatically.
   ============================================================================
 -->
 <script>
-  window.FIREBASE_CONFIG = {
-    apiKey: "AIzaSyBNYWnCv-d_GZa1tlt1BR9EHOc85yQP-rE",
-    authDomain: "kavi-magi-diary.firebaseapp.com",
-    projectId: "kavi-magi-diary",
-    storageBucket: "kavi-magi-diary.firebasestorage.app",
-    messagingSenderId: "487237573557",
-    appId: "1:487237573557:web:eba8c40f9ba8540dd117fc"
+  window.SUPABASE_CONFIG = {
+    url: "https://qjgpiktlngrvoylkxrry.supabase.co",
+    anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFqZ3Bpa3Rsbmdydm95bGt4cnJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ5MzIxODYsImV4cCI6MjEwMDUwODE4Nn0.-adL6_MPF2-imFQ1oaKcjGgmdp04ZV_Rid4DlfRGluo",
   };
 </script>
 
@@ -147,15 +140,13 @@ function localSave(key, value) {
   try { window.localStorage.setItem(`kavi-magi:${key}`, JSON.stringify(value)); } catch (e) { console.error(e); }
 }
 
-/* ============ Firebase setup ============ */
-const FIREBASE_READY = window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey && !window.FIREBASE_CONFIG.apiKey.startsWith("PASTE_");
-let fbApp, fbAuth, fbDb, fbStorage;
-if (FIREBASE_READY) {
-  fbApp = firebase.initializeApp(window.FIREBASE_CONFIG);
-  fbAuth = firebase.auth();
-  fbDb = firebase.firestore();
-  fbStorage = firebase.storage();
+/* ============ Supabase setup ============ */
+const SUPABASE_READY = window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.url && !window.SUPABASE_CONFIG.url.startsWith("PASTE_");
+let sb = null;
+if (SUPABASE_READY) {
+  sb = supabase.createClient(window.SUPABASE_CONFIG.url, window.SUPABASE_CONFIG.anonKey);
 }
+const ATTACHMENTS_BUCKET = "attachments";
 
 function randomFamilyCode() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no confusing chars (0/O, 1/I)
@@ -201,31 +192,34 @@ function Avatar({ name, size = 36, color, ring }) {
 }
 
 /* ============================================================
-   ROOT — decides Firebase vs local-only, then family-code gate
+   ROOT — decides Supabase vs local-only, then family-code gate
    ============================================================ */
 function Root() {
-  const [authReady, setAuthReady] = useState(!FIREBASE_READY);
+  const [authReady, setAuthReady] = useState(!SUPABASE_READY);
   const [familyCode, setFamilyCode] = useState(() => localLoad("familyCode", null));
 
   useEffect(() => {
-    if (!FIREBASE_READY) return;
-    const unsub = fbAuth.onAuthStateChanged((user) => {
-      if (user) { setAuthReady(true); }
-      else { fbAuth.signInAnonymously().catch(err => { console.error(err); setAuthReady(true); }); }
-    });
-    return () => unsub();
+    if (!SUPABASE_READY) return;
+    (async () => {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) {
+        const { error } = await sb.auth.signInAnonymously();
+        if (error) console.error("Anonymous sign-in failed:", error);
+      }
+      setAuthReady(true);
+    })();
   }, []);
 
   if (!authReady) {
     return <CenterLoading text="Connecting…" />;
   }
 
-  if (FIREBASE_READY && !familyCode) {
+  if (SUPABASE_READY && !familyCode) {
     return <FamilyCodeGate onReady={(code) => { localSave("familyCode", code); setFamilyCode(code); }} />;
   }
 
-  return <App familyCode={FIREBASE_READY ? familyCode : null}
-              onChangeFamily={FIREBASE_READY ? () => { localSave("familyCode", null); setFamilyCode(null); } : null} />;
+  return <App familyCode={SUPABASE_READY ? familyCode : null}
+              onChangeFamily={SUPABASE_READY ? () => { localSave("familyCode", null); setFamilyCode(null); } : null} />;
 }
 
 function CenterLoading({ text }) {
@@ -249,11 +243,10 @@ function FamilyCodeGate({ onReady }) {
   const createFamily = async () => {
     setCreating(true);
     try {
-      await fbDb.collection("families").doc(newCode).set({
-        profiles: [], entries: {}, createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      });
+      const { error } = await sb.from("families").insert({ code: newCode, profiles: [], entries: {} });
+      if (error) throw error;
       onReady(newCode);
-    } catch (e) { console.error("Create family failed:", e); setError(`Could not create family — ${e.code || e.message || "check your Firebase setup"}.`); setCreating(false); }
+    } catch (e) { console.error("Create family failed:", e); setError(`Could not create family — ${e.message || "check your Supabase setup"}.`); setCreating(false); }
   };
 
   const joinFamily = async () => {
@@ -261,10 +254,11 @@ function FamilyCodeGate({ onReady }) {
     if (code.length < 4) { setError("Enter the 6-character code from the other device."); return; }
     setCreating(true);
     try {
-      const doc = await fbDb.collection("families").doc(code).get();
-      if (!doc.exists) { setError("No family found with that code. Check it and try again."); setCreating(false); return; }
+      const { data, error } = await sb.from("families").select("code").eq("code", code).maybeSingle();
+      if (error) throw error;
+      if (!data) { setError("No family found with that code. Check it and try again."); setCreating(false); return; }
       onReady(code);
-    } catch (e) { console.error("Join family failed:", e); setError(`Something went wrong — ${e.code || e.message || "check your connection and try again"}.`); setCreating(false); }
+    } catch (e) { console.error("Join family failed:", e); setError(`Something went wrong — ${e.message || "check your connection and try again"}.`); setCreating(false); }
   };
 
   return (
@@ -335,19 +329,26 @@ function App({ familyCode, onChangeFamily }) {
   const [showProfileSwitcher, setShowProfileSwitcher] = useState(false);
   const [editingProfile, setEditingProfile] = useState(null);
 
-  /* --- Firestore live sync --- */
-  useEffect(() => {
+  /* --- Supabase sync (fetch on load, then poll every 5s to pick up changes from other devices) --- */
+  const fetchFamily = useCallback(async () => {
     if (!familyCode) return;
-    const unsub = fbDb.collection("families").doc(familyCode).onSnapshot((doc) => {
-      const data = doc.data() || {};
+    const { data, error } = await sb.from("families").select("profiles, entries").eq("code", familyCode).maybeSingle();
+    if (error) { console.error("Fetch family failed:", error); setLoaded(true); setSyncing(false); return; }
+    if (data) {
       setProfiles(data.profiles || []);
       setEntriesByProfile(data.entries || {});
-      setLoaded(true);
-      setSyncing(false);
       if ((data.profiles || []).length === 0) setShowProfileForm(true);
-    }, (err) => { console.error(err); setSyncing(false); setLoaded(true); });
-    return () => unsub();
+    }
+    setLoaded(true);
+    setSyncing(false);
   }, [familyCode]);
+
+  useEffect(() => {
+    if (!familyCode) return;
+    fetchFamily();
+    const interval = setInterval(fetchFamily, 5000);
+    return () => clearInterval(interval);
+  }, [familyCode, fetchFamily]);
 
   useEffect(() => {
     if (!familyCode && profiles.length === 0) setShowProfileForm(true);
@@ -360,13 +361,17 @@ function App({ familyCode, onChangeFamily }) {
 
   const persist = useCallback(async (nextProfiles, nextEntries) => {
     if (familyCode) {
+      // Update local state immediately so the UI feels instant; the write
+      // happens in the background and the next poll reconciles either way.
+      setProfiles(nextProfiles);
+      setEntriesByProfile(nextEntries);
       setSyncing(true);
       try {
-        await fbDb.collection("families").doc(familyCode).set(
-          { profiles: nextProfiles, entries: nextEntries, updatedAt: firebase.firestore.FieldValue.serverTimestamp() },
-          { merge: true }
-        );
-      } catch (e) { console.error(e); }
+        const { error } = await sb.from("families")
+          .update({ profiles: nextProfiles, entries: nextEntries, updated_at: new Date().toISOString() })
+          .eq("code", familyCode);
+        if (error) throw error;
+      } catch (e) { console.error("Save failed:", e); }
       setSyncing(false);
     } else {
       localSave("profiles", nextProfiles);
@@ -530,19 +535,19 @@ function AttachmentPicker({ familyCode, activeProfileId, attachment, onChange })
     if (file.size > MAX_FILE_MB * 1024 * 1024) { setError(`File is too big (max ${MAX_FILE_MB}MB).`); return; }
 
     if (!familyCode) {
-      setError("Attachments need cloud sync to be set up (Firebase). This device is running in local-only mode.");
+      setError("Attachments need cloud sync to be set up (Supabase). This device is running in local-only mode.");
       return;
     }
     setUploading(true);
     try {
-      const path = `families/${familyCode}/${activeProfileId}/${uid()}-${file.name}`;
-      const ref = fbStorage.ref().child(path);
-      await ref.put(file);
-      const url = await ref.getDownloadURL();
-      onChange({ name: file.name, url, type: file.type, size: file.size, kind: fileKind(file.type, file.name) });
+      const path = `${familyCode}/${activeProfileId}/${uid()}-${file.name}`;
+      const { error: uploadError } = await sb.storage.from(ATTACHMENTS_BUCKET).upload(path, file);
+      if (uploadError) throw uploadError;
+      const { data } = sb.storage.from(ATTACHMENTS_BUCKET).getPublicUrl(path);
+      onChange({ name: file.name, url: data.publicUrl, type: file.type, size: file.size, kind: fileKind(file.type, file.name) });
     } catch (err) {
-      console.error(err);
-      setError("Upload failed. Check your Firebase Storage setup.");
+      console.error("Attachment upload failed:", err);
+      setError(`Upload failed — ${err.message || "check your Supabase Storage setup"}.`);
     }
     setUploading(false);
   };
@@ -571,13 +576,51 @@ function AttachmentPicker({ familyCode, activeProfileId, attachment, onChange })
 }
 
 function AttachmentChip({ attachment }) {
+  const [downloading, setDownloading] = useState(false);
   if (!attachment) return null;
+
+  const handleView = () => {
+    // Opens in a new tab. For images/PDFs the browser previews inline;
+    // for Word/Excel files the browser will download it and the device's
+    // own "Open with…" app chooser takes over from there — that's normal
+    // OS behavior for file types browsers can't render themselves.
+    window.open(attachment.url, "_blank", "noopener,noreferrer");
+  };
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      // Fetch as a blob so we can force a real download with the original
+      // filename, rather than just navigating to the URL.
+      const res = await fetch(attachment.url);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = attachment.name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 4000);
+    } catch (e) {
+      console.error("Download failed, falling back to direct link:", e);
+      window.open(attachment.url, "_blank", "noopener,noreferrer");
+    }
+    setDownloading(false);
+  };
+
   return (
-    <a href={attachment.url} target="_blank" rel="noopener noreferrer"
-      className="inline-flex items-center gap-1 mt-1.5 text-[11px] font-bold px-2 py-1 rounded-md"
-      style={{ background: fileBadgeColor(attachment.kind), color: INK }}>
-      <Icon.paperclip size={11} /> {attachment.name}
-    </a>
+    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+      <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-md" style={{ background: fileBadgeColor(attachment.kind), color: INK }}>
+        <Icon.paperclip size={11} /> {attachment.name}
+      </span>
+      <button onClick={handleView} className="text-[11px] font-bold px-2 py-1 rounded-md" style={{ background: "#E4EEF7", color: NAVY_SOFT }}>
+        View
+      </button>
+      <button onClick={handleDownload} disabled={downloading} className="text-[11px] font-bold px-2 py-1 rounded-md disabled:opacity-50" style={{ background: "#E1F3EC", color: TEAL_DARK }}>
+        {downloading ? "Downloading…" : "Download"}
+      </button>
+    </div>
   );
 }
 
