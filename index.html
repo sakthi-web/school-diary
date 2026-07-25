@@ -356,7 +356,9 @@ function App({ familyCode, onChangeFamily }) {
 
   useEffect(() => { localSave("activeProfileId", activeProfileId); }, [activeProfileId]);
   useEffect(() => {
-    if (!activeProfileId && profiles.length > 0) setActiveProfileId(profiles[0].id);
+    if (profiles.length === 0) return;
+    const stillValid = profiles.some(p => p.id === activeProfileId);
+    if (!activeProfileId || !stillValid) setActiveProfileId(profiles[0].id);
   }, [profiles, activeProfileId]);
 
   const persist = useCallback(async (nextProfiles, nextEntries) => {
