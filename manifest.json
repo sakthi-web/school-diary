@@ -1,0 +1,15 @@
+{
+  "name": "Kavi & Magi School Diary",
+  "short_name": "Kavi & Magi",
+  "description": "Homework tracker and school diary for Kavi & Magi",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F5F8F8",
+  "theme_color": "#0F2E4C",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "favicon-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "apple-touch-icon.png", "sizes": "180x180", "type": "image/png", "purpose": "any" }
+  ]
+}
