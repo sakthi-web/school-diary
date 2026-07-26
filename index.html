@@ -635,7 +635,7 @@ function App({ familyCode, onChangeFamily }) {
         </button>
       )}
 
-      {showAdd && <AddTaskSheet onClose={() => setShowAdd(false)} onSave={(task) => { addTasks([task]); setShowAdd(false); }} familyCode={familyCode} activeProfileId={activeProfileId} />}
+      {showAdd && <AddTaskSheet onClose={() => setShowAdd(false)} onSave={(task) => { addTasks([task]); setShowAdd(false); }} familyCode={familyCode} activeProfileId={activeProfileId} dateKey={selectedDate} onJumpToday={() => setSelectedDate(todayKey())} />}
       {showImport && <ImportSheet onClose={() => setShowImport(false)}
         onConfirm={(tasks, dateKey) => { addTasks(tasks, dateKey); setShowImport(false); setSelectedDate(dateKey); setTab("today"); }}
         defaultDate={selectedDate} />}
@@ -880,12 +880,20 @@ function HomeView({ profiles, entriesByProfile, onOpenProfile, onGoDiary, onImpo
     <div className="relative overflow-hidden" style={{ background: "linear-gradient(180deg, #BEE7F5 0%, #DCF3FA 55%, #FFF9EC 100%)" }}>
       <KidsBackdrop />
       {/* Sky header */}
-      <div className="relative z-10 px-4 pt-6 pb-5">
-        <div className="max-w-xl mx-auto flex items-center justify-between mb-4">
-          <button onClick={onMenu} className="w-10 h-10 rounded-full bg-white/70 flex items-center justify-center active:scale-90 transition" aria-label="Menu">
+      <div className="relative z-10 px-4 pt-4 pb-5">
+        <div className="max-w-xl mx-auto flex items-center justify-between mb-1 gap-2">
+          <button onClick={onMenu} className="w-10 h-10 rounded-full bg-white/70 flex items-center justify-center active:scale-90 transition shrink-0" aria-label="Menu">
             <Icon.menu size={19} color={NAVY} />
           </button>
-          <div className="flex items-center gap-2">
+
+          <div className="text-center flex-1 min-w-0">
+            <h1 className="font-display font-extrabold text-xl leading-tight" style={{ color: NAVY, ...outlinedTitle }}>
+              KAVI &amp; MAGI
+            </h1>
+            <p className="font-display font-extrabold text-xs -mt-1" style={{ color: TEAL_DARK, ...outlinedTitle }}>SCHOOL DIARY</p>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
             <InstallButton />
             <button onClick={onBell} className="w-10 h-10 rounded-full bg-white/70 flex items-center justify-center active:scale-90 transition relative" aria-label="Reminders">
               <Icon.bell size={19} color={NAVY} />
@@ -896,11 +904,6 @@ function HomeView({ profiles, entriesByProfile, onOpenProfile, onGoDiary, onImpo
           </div>
         </div>
         <div className="max-w-xl mx-auto text-center">
-          <h1 className="font-display font-extrabold text-2xl leading-tight" style={{ color: NAVY, ...outlinedTitle }}>
-            KAVI &amp; MAGI
-          </h1>
-          <p className="font-display font-extrabold text-sm -mt-1" style={{ color: TEAL_DARK, ...outlinedTitle }}>SCHOOL DIARY</p>
-
           {/* Mascot art, right under the logo */}
           <div className="flex justify-center mt-1 -mb-1">
             <img src="mascots.png" alt="" className="h-24 w-auto object-contain select-none pointer-events-none drop-shadow-lg" draggable="false" />
@@ -1219,12 +1222,23 @@ function Sheet({ title, children, onClose, dismissable = true }) {
   );
 }
 
-function AddTaskSheet({ onClose, onSave, familyCode, activeProfileId }) {
+function AddTaskSheet({ onClose, onSave, familyCode, activeProfileId, dateKey, onJumpToday }) {
   const [subject, setSubject] = useState("General");
   const [text, setText] = useState("");
   const [attachment, setAttachment] = useState(null);
+  const isToday = dateKey === todayKey();
   return (
     <Sheet onClose={onClose} title="Add a task">
+      {dateKey && (
+        <div className="flex items-center justify-between mb-4 px-3 py-2 rounded-xl" style={{ background: isToday ? "#E1F3EC" : "#FBEAC0" }}>
+          <span className="text-xs font-bold flex items-center gap-1.5" style={{ color: isToday ? TEAL_DARK : "#8A6300" }}>
+            <Icon.calendar size={13} /> Adding to {prettyDate(dateKey)}{isToday ? "" : " (not today)"}
+          </span>
+          {!isToday && (
+            <button onClick={onJumpToday} className="text-xs font-bold underline" style={{ color: "#8A6300" }}>Use today</button>
+          )}
+        </div>
+      )}
       <label className="text-xs font-bold mb-1.5 block uppercase tracking-wide" style={{ color: MUTED }}>Subject</label>
       <div className="flex flex-wrap gap-2 mb-4">
         {["General", ...KNOWN_SUBJECTS].map(s => {
