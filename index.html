@@ -78,18 +78,18 @@ const MUTED = "#5C6B71";
 const LINE = "#E3EAEA";
 
 const SUBJECT_STYLES = {
-  Hindi:     { bg: "#FDECE3", fg: "#B7551E" },
-  English:   { bg: "#E4EEF7", fg: NAVY_SOFT },
-  Maths:     { bg: "#EAE6F7", fg: "#5A3F94" },
-  Science:   { bg: "#E1F3EC", fg: TEAL_DARK },
-  EVS:       { bg: "#E1F3EC", fg: TEAL_DARK },
-  SST:       { bg: "#FBF1DC", fg: "#8A6300" },
-  Sanskrit:  { bg: "#FBE6EF", fg: "#A32E6B" },
-  Computer:  { bg: "#DFF1F2", fg: "#1E6E77" },
-  GK:        { bg: "#ECE8F7", fg: "#5A3F94" },
-  Art:       { bg: "#FCE6EE", fg: "#A32E6B" },
-  PE:        { bg: "#E9F3DD", fg: "#4F7A21" },
-  General:   { bg: "#EDEFEF", fg: MUTED },
+  Hindi:     { bg: "#FDECE3", fg: "#B7551E", card: "#FFE3CC", cardFg: "#9A4A18" },
+  English:   { bg: "#E4EEF7", fg: NAVY_SOFT, card: "#CFE6F9", cardFg: NAVY_SOFT },
+  Maths:     { bg: "#EAE6F7", fg: "#5A3F94", card: "#E2D9F8", cardFg: "#5A3F94" },
+  Science:   { bg: "#E1F3EC", fg: TEAL_DARK, card: "#CDEEDC", cardFg: TEAL_DARK },
+  EVS:       { bg: "#E1F3EC", fg: TEAL_DARK, card: "#CDEEDC", cardFg: TEAL_DARK },
+  SST:       { bg: "#FBF1DC", fg: "#8A6300", card: "#FBEAC0", cardFg: "#8A6300" },
+  Sanskrit:  { bg: "#FBE6EF", fg: "#A32E6B", card: "#FAD3E4", cardFg: "#A32E6B" },
+  Computer:  { bg: "#DFF1F2", fg: "#1E6E77", card: "#C9EDEF", cardFg: "#1E6E77" },
+  GK:        { bg: "#ECE8F7", fg: "#5A3F94", card: "#E2D9F8", cardFg: "#5A3F94" },
+  Art:       { bg: "#FCE6EE", fg: "#A32E6B", card: "#FAD3E4", cardFg: "#A32E6B" },
+  PE:        { bg: "#E9F3DD", fg: "#4F7A21", card: "#DCEFC4", cardFg: "#4F7A21" },
+  General:   { bg: "#EDEFEF", fg: MUTED, card: "#E7EAEA", cardFg: "#4A5559" },
 };
 const KNOWN_SUBJECTS = Object.keys(SUBJECT_STYLES).filter(s => s !== "General");
 const styleFor = (s) => SUBJECT_STYLES[s] || SUBJECT_STYLES.General;
@@ -613,10 +613,10 @@ function App({ familyCode, onChangeFamily }) {
 
       <nav className="fixed bottom-0 inset-x-0 z-20 bg-white px-6" style={{ borderTop: `1px solid ${LINE}`, boxShadow: "0 -4px 16px rgba(15,46,76,0.06)" }}>
         <div className="max-w-xl mx-auto flex justify-around py-2.5">
-          <NavBtn icon={<Icon.home size={20} />} label="Home" active={tab === "home"} onClick={() => setTab("home")} />
-          <NavBtn icon={<Icon.book size={20} />} label="Today" active={tab === "today"} onClick={() => setTab("today")} />
-          <NavBtn icon={<Icon.calendar size={20} />} label="Diary" active={tab === "diary"} onClick={() => setTab("diary")} />
-          <NavBtn icon={<Icon.folder size={20} />} label="Docs" active={tab === "docs"} onClick={() => setTab("docs")} />
+          <NavBtn icon={<Icon.home size={20} />} label="Home" active={tab === "home"} onClick={() => setTab("home")} bg="#CFE6F9" fg={NAVY_SOFT} />
+          <NavBtn icon={<Icon.book size={20} />} label="Today" active={tab === "today"} onClick={() => setTab("today")} bg="#CDEEDC" fg={TEAL_DARK} />
+          <NavBtn icon={<Icon.calendar size={20} />} label="Diary" active={tab === "diary"} onClick={() => setTab("diary")} bg="#FBEAC0" fg="#8A6300" />
+          <NavBtn icon={<Icon.folder size={20} />} label="Docs" active={tab === "docs"} onClick={() => setTab("docs")} bg="#E2D9F8" fg="#5A3F94" />
         </div>
       </nav>
 
@@ -657,11 +657,11 @@ function App({ familyCode, onChangeFamily }) {
   );
 }
 
-function NavBtn({ icon, label, active, onClick }) {
+function NavBtn({ icon, label, active, onClick, bg, fg }) {
   return (
-    <button onClick={onClick} className="flex flex-col items-center gap-1 px-3 py-1 active:scale-90 transition">
-      <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: active ? NAVY : "transparent", color: active ? "#fff" : "#9AA6AB" }}>{icon}</div>
-      <span className="text-[10px] font-bold" style={{ color: active ? NAVY : "#9AA6AB" }}>{label}</span>
+    <button onClick={onClick} className="flex flex-col items-center gap-1 px-2.5 py-1.5 rounded-2xl transition active:scale-90" style={{ background: active ? bg : "transparent" }}>
+      <div className="w-9 h-9 rounded-full flex items-center justify-center transition" style={{ background: bg, color: fg }}>{icon}</div>
+      <span className="text-[10px] font-bold" style={{ color: active ? fg : "#9AA6AB" }}>{label}</span>
     </button>
   );
 }
@@ -868,6 +868,8 @@ function HomeView({ profiles, entriesByProfile, onOpenProfile, onGoDiary, onImpo
   const names = profiles.map(p => p.name.split(" ")[0]);
   const greetingNames = names.length > 1 ? `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]}` : (names[0] || "");
   const pendingCount = stats.reduce((sum, s) => sum + (s.todayTotal - s.todayDone), 0);
+  const bestStreak = stats.reduce((max, s) => Math.max(max, s.streak), 0);
+  const starsCollected = stats.reduce((sum, s) => sum + BADGES.filter(b => b.test(s)).length, 0);
 
   const outlinedTitle = {
     WebkitTextStroke: "1.5px white",
@@ -908,6 +910,20 @@ function HomeView({ profiles, entriesByProfile, onOpenProfile, onGoDiary, onImpo
             {greetingNames ? `Hello, ${greetingNames}!` : "Ready to learn?"}
           </p>
           <p className="text-sm font-semibold" style={{ color: NAVY_SOFT }}>Ready to learn?</p>
+
+          {(bestStreak > 0 || starsCollected > 0) && (
+            <div className="flex justify-center mt-3">
+              <div className="inline-flex items-center gap-2.5 bg-white/85 rounded-full px-4 py-1.5 shadow-sm">
+                {bestStreak > 0 && (
+                  <span className="text-xs font-bold flex items-center gap-1" style={{ color: "#B7551E" }}>🔥 {bestStreak} Day Streak!</span>
+                )}
+                {bestStreak > 0 && starsCollected > 0 && <span style={{ color: LINE }}>|</span>}
+                {starsCollected > 0 && (
+                  <span className="text-xs font-bold flex items-center gap-1" style={{ color: "#8A6300" }}>⭐ {starsCollected} Stars Collected!</span>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1087,6 +1103,12 @@ function TodayView({ selectedDate, setSelectedDate, dayData, historyDates = [], 
       )}
 
       {tasks.length > 0 && (
+        <p className="font-display font-extrabold text-sm mb-3 flex items-center gap-1.5" style={{ color: NAVY }}>
+          <Icon.calendar size={15} color={NAVY} /> TODAY'S TASKS ({tasks.length})
+        </p>
+      )}
+
+      {tasks.length > 0 && (
         <div className="bg-white rounded-2xl p-4 mb-4 flex items-center gap-4" style={{ border: `1px solid ${LINE}` }}>
           <div className="relative w-16 h-16 shrink-0">
             <svg viewBox="0 0 36 36" className="w-16 h-16 -rotate-90">
@@ -1117,24 +1139,27 @@ function TodayView({ selectedDate, setSelectedDate, dayData, historyDates = [], 
           </div>
         </div>
       ) : (
-        <ul className="space-y-2.5">
+        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {tasks.map(t => {
             const s = styleFor(t.subject);
+            const emoji = SUBJECT_EMOJI[t.subject] || SUBJECT_EMOJI.General;
             return (
-              <li key={t.id} className="bg-white rounded-xl px-3 py-3 flex items-start gap-3 transition hover:shadow-md" style={{ border: `1px solid ${LINE}` }}>
-                <button onClick={() => onToggle(t.id)}
-                  className="w-6 h-6 rounded-md flex items-center justify-center shrink-0 border-2 transition mt-0.5"
-                  style={{ background: t.done ? TEAL : "#fff", borderColor: t.done ? TEAL : "#D5DEDF" }}>
-                  {t.done && <Icon.check size={13} color="#fff" />}
+              <li key={t.id} className="rounded-2xl p-4 relative transition" style={{ background: t.done ? "#EDF0F0" : s.card }}>
+                <button onClick={() => onDelete(t.id)} className="absolute top-3 right-3 active:scale-90 transition" style={{ color: t.done ? "#B9C2C4" : "rgba(0,0,0,0.28)" }} aria-label="Delete task">
+                  <Icon.trash size={15} />
                 </button>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0" style={{ background: s.bg, color: s.fg }}>{t.subject}</span>
-                    <span className={`text-sm ${t.done ? "line-through" : ""}`} style={{ color: t.done ? "#B7BFC1" : INK }}>{t.text}</span>
-                  </div>
-                  <AttachmentChip attachment={t.attachment} />
-                </div>
-                <button onClick={() => onDelete(t.id)} className="shrink-0 active:scale-90 mt-0.5" style={{ color: "#C7CFD1" }}><Icon.trash size={16} /></button>
+                <p className="font-display font-extrabold text-sm flex items-center gap-1.5 pr-5" style={{ color: t.done ? MUTED : s.cardFg }}>
+                  <span className="text-base leading-none">{emoji}</span> {t.subject}
+                </p>
+                <p className={`text-sm mt-1.5 ${t.done ? "line-through" : ""}`} style={{ color: t.done ? "#9AA3A5" : INK }}>{t.text}</p>
+                <AttachmentChip attachment={t.attachment} />
+                <button onClick={() => onToggle(t.id)}
+                  className="w-full mt-3 py-2.5 rounded-xl text-sm font-display font-bold flex items-center justify-center gap-1.5 transition active:scale-[0.97]"
+                  style={t.done
+                    ? { background: "#fff", color: TEAL_DARK, border: `1.5px solid ${TEAL}` }
+                    : { background: `linear-gradient(135deg, ${TEAL}, ${TEAL_DARK})`, color: "#fff", boxShadow: "0 3px 10px rgba(30,143,115,0.35)" }}>
+                  {t.done ? <Icon.check size={14} /> : null} {t.done ? "Done" : "Mark Done"} <span>⭐</span>
+                </button>
               </li>
             );
           })}
