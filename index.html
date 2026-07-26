@@ -175,6 +175,9 @@ const Icon = {
   home: (p) => <svg viewBox="0 0 24 24" width={p.size||18} height={p.size||18} fill="none" stroke={p.color||"currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"/></svg>,
   sparkle: (p) => <svg viewBox="0 0 24 24" width={p.size||18} height={p.size||18} fill="none" stroke={p.color||"currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3M12 18v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M3 12h3M18 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/><circle cx="12" cy="12" r="3"/></svg>,
   send: (p) => <svg viewBox="0 0 24 24" width={p.size||18} height={p.size||18} fill="none" stroke={p.color||"currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>,
+  menu: (p) => <svg viewBox="0 0 24 24" width={p.size||18} height={p.size||18} fill="none" stroke={p.color||"currentColor"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>,
+  bell: (p) => <svg viewBox="0 0 24 24" width={p.size||18} height={p.size||18} fill="none" stroke={p.color||"currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>,
+  folder: (p) => <svg viewBox="0 0 24 24" width={p.size||18} height={p.size||18} fill="none" stroke={p.color||"currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>,
 };
 
 function Emblem({ size = 44 }) {
@@ -323,12 +326,14 @@ function App({ familyCode, onChangeFamily }) {
   const [tab, setTab] = useState("home");
   const [profiles, setProfiles] = useState(() => familyCode ? [] : localLoad("profiles", []));
   const [entriesByProfile, setEntriesByProfile] = useState(() => familyCode ? {} : localLoad("entries", {}));
+  const [commonDocs, setCommonDocs] = useState(() => familyCode ? [] : localLoad("commonDocs", []));
   const [activeProfileId, setActiveProfileId] = useState(() => localLoad("activeProfileId", null));
   const [loaded, setLoaded] = useState(!familyCode);
   const [syncing, setSyncing] = useState(!!familyCode);
   const [selectedDate, setSelectedDate] = useState(todayKey());
   const [showAdd, setShowAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showAddDoc, setShowAddDoc] = useState(false);
   const [showProfileForm, setShowProfileForm] = useState(false);
   const [showProfileSwitcher, setShowProfileSwitcher] = useState(false);
   const [editingProfile, setEditingProfile] = useState(null);
@@ -336,11 +341,12 @@ function App({ familyCode, onChangeFamily }) {
   /* --- Supabase sync (fetch on load, then poll every 5s to pick up changes from other devices) --- */
   const fetchFamily = useCallback(async () => {
     if (!familyCode) return;
-    const { data, error } = await sb.from("families").select("profiles, entries").eq("code", familyCode).maybeSingle();
+    const { data, error } = await sb.from("families").select("profiles, entries, common_docs").eq("code", familyCode).maybeSingle();
     if (error) { console.error("Fetch family failed:", error); setLoaded(true); setSyncing(false); return; }
     if (data) {
       setProfiles(data.profiles || []);
       setEntriesByProfile(data.entries || {});
+      setCommonDocs(data.common_docs || []);
       if ((data.profiles || []).length === 0) setShowProfileForm(true);
     }
     setLoaded(true);
@@ -387,6 +393,22 @@ function App({ familyCode, onChangeFamily }) {
     }
   }, [familyCode]);
 
+  const persistDocs = useCallback(async (nextDocs) => {
+    if (familyCode) {
+      setCommonDocs(nextDocs);
+      setSyncing(true);
+      try {
+        const { error } = await sb.from("families")
+          .update({ common_docs: nextDocs, updated_at: new Date().toISOString() })
+          .eq("code", familyCode);
+        if (error) throw error;
+      } catch (e) { console.error("Save doc failed:", e); }
+      setSyncing(false);
+    } else {
+      localSave("commonDocs", nextDocs);
+      setCommonDocs(nextDocs);
+    }
+  }, [familyCode]);
   const activeProfile = profiles.find(p => p.id === activeProfileId) || null;
   const dayData = (entriesByProfile[activeProfileId] && entriesByProfile[activeProfileId][selectedDate]) || { tasks: [] };
 
@@ -436,47 +458,50 @@ function App({ familyCode, onChangeFamily }) {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: PAPER, color: INK }}>
-      <header className="sticky top-0 z-20 px-4 pt-5 pb-4" style={{ background: `linear-gradient(135deg, ${NAVY} 0%, ${NAVY_SOFT} 100%)` }}>
-        <div className="max-w-xl mx-auto flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <Emblem />
-            <div>
-              <p className="text-[10px] uppercase tracking-[0.18em] font-bold" style={{ color: "#8FB8CE" }}>Kavi &amp; Magi</p>
-              <h1 className="font-display font-bold text-lg leading-tight text-white -mt-0.5">
-                {activeProfile ? `Hi, ${activeProfile.name.split(" ")[0]}` : "School Diary"}
-              </h1>
+      {tab !== "home" && (
+        <header className="sticky top-0 z-20 px-4 pt-5 pb-4" style={{ background: `linear-gradient(135deg, ${NAVY} 0%, ${NAVY_SOFT} 100%)` }}>
+          <div className="max-w-xl mx-auto flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <Emblem />
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.18em] font-bold" style={{ color: "#8FB8CE" }}>Kavi &amp; Magi</p>
+                <h1 className="font-display font-bold text-lg leading-tight text-white -mt-0.5">
+                  {activeProfile ? `Hi, ${activeProfile.name.split(" ")[0]}` : "School Diary"}
+                </h1>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {familyCode && (
+                <span className="text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1" style={{ background: "rgba(255,255,255,0.12)", color: syncing ? "#F5D08A" : "#8FE3C9" }}>
+                  <Icon.cloud size={11} /> {syncing ? "Syncing…" : "Synced"}
+                </span>
+              )}
+              <button onClick={() => setShowProfileSwitcher(true)} className="active:scale-90 transition" aria-label="Switch profile">
+                {activeProfile ? <Avatar name={activeProfile.name} color={activeProfile.color} size={38} ring /> : <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(255,255,255,0.12)" }}><Icon.user size={18} color="#fff" /></div>}
+              </button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {familyCode && (
-              <span className="text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1" style={{ background: "rgba(255,255,255,0.12)", color: syncing ? "#F5D08A" : "#8FE3C9" }}>
-                <Icon.cloud size={11} /> {syncing ? "Syncing…" : "Synced"}
+          {activeProfile && (
+            <div className="max-w-xl mx-auto flex items-center gap-2">
+              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.12)", color: "#CFE3EC" }}>
+                Class {activeProfile.className}{activeProfile.section ? `-${activeProfile.section}` : ""}
               </span>
-            )}
-            <button onClick={() => setShowProfileSwitcher(true)} className="active:scale-90 transition" aria-label="Switch profile">
-              {activeProfile ? <Avatar name={activeProfile.name} color={activeProfile.color} size={38} ring /> : <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(255,255,255,0.12)" }}><Icon.user size={18} color="#fff" /></div>}
-            </button>
-          </div>
-        </div>
-        {activeProfile && (
-          <div className="max-w-xl mx-auto flex items-center gap-2">
-            <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.12)", color: "#CFE3EC" }}>
-              Class {activeProfile.className}{activeProfile.section ? `-${activeProfile.section}` : ""}
-            </span>
-            {profiles.length > 1 && (
-              <button onClick={() => setShowProfileSwitcher(true)} className="text-[11px] font-bold flex items-center gap-1" style={{ color: "#8FE3C9" }}>
-                <Icon.swap size={12} /> Switch student
-              </button>
-            )}
-          </div>
-        )}
-      </header>
+              {profiles.length > 1 && (
+                <button onClick={() => setShowProfileSwitcher(true)} className="text-[11px] font-bold flex items-center gap-1" style={{ color: "#8FE3C9" }}>
+                  <Icon.swap size={12} /> Switch student
+                </button>
+              )}
+            </div>
+          )}
+        </header>
+      )}
 
-      <main className="flex-1 overflow-y-auto px-4 pt-5 pb-28 max-w-xl w-full mx-auto">
+      <main className={`flex-1 overflow-y-auto pb-28 max-w-xl w-full mx-auto ${tab === "home" ? "" : "px-4 pt-5"}`}>
         {tab === "home" && (
           <HomeView profiles={profiles} entriesByProfile={entriesByProfile}
             onOpenProfile={(id) => { setActiveProfileId(id); setTab("today"); }}
-            onGoDiary={() => setTab("diary")} onImport={() => setShowImport(true)} />
+            onGoDiary={() => setTab("diary")} onImport={() => setShowImport(true)}
+            onMenu={() => setShowProfileSwitcher(true)} onBell={() => setTab("today")} />
         )}
         {tab === "today" && (
           <TodayView selectedDate={selectedDate} setSelectedDate={setSelectedDate} dayData={dayData}
@@ -486,6 +511,10 @@ function App({ familyCode, onChangeFamily }) {
         {tab === "diary" && (
           <DiaryView historyDates={historyDates} entries={entriesByProfile[activeProfileId] || {}} onOpen={(k) => { setSelectedDate(k); setTab("today"); }} />
         )}
+        {tab === "docs" && (
+          <DocsView docs={commonDocs} onAdd={() => setShowAddDoc(true)}
+            onDelete={(id) => persistDocs(commonDocs.filter(d => d.id !== id))} />
+        )}
       </main>
 
       <nav className="fixed bottom-0 inset-x-0 z-20 bg-white px-6" style={{ borderTop: `1px solid ${LINE}`, boxShadow: "0 -4px 16px rgba(15,46,76,0.06)" }}>
@@ -493,14 +522,21 @@ function App({ familyCode, onChangeFamily }) {
           <NavBtn icon={<Icon.home size={20} />} label="Home" active={tab === "home"} onClick={() => setTab("home")} />
           <NavBtn icon={<Icon.book size={20} />} label="Today" active={tab === "today"} onClick={() => setTab("today")} />
           <NavBtn icon={<Icon.calendar size={20} />} label="Diary" active={tab === "diary"} onClick={() => setTab("diary")} />
-          <NavBtn icon={<Icon.chat size={20} />} label="Import" onClick={() => setShowImport(true)} />
+          <NavBtn icon={<Icon.folder size={20} />} label="Docs" active={tab === "docs"} onClick={() => setTab("docs")} />
         </div>
       </nav>
 
-      {(tab === "today" || tab === "home") && activeProfile && (
+      {tab === "today" && activeProfile && (
         <button onClick={() => setShowAdd(true)}
           className="fixed bottom-24 right-5 z-30 w-14 h-14 rounded-full text-white flex items-center justify-center active:scale-90 transition"
           style={{ background: `linear-gradient(135deg, ${TEAL}, ${TEAL_DARK})`, boxShadow: "0 6px 16px rgba(30,143,115,0.4)" }} aria-label="Add task">
+          <Icon.plus size={24} />
+        </button>
+      )}
+      {tab === "docs" && (
+        <button onClick={() => setShowAddDoc(true)}
+          className="fixed bottom-24 right-5 z-30 w-14 h-14 rounded-full text-white flex items-center justify-center active:scale-90 transition"
+          style={{ background: `linear-gradient(135deg, ${TEAL}, ${TEAL_DARK})`, boxShadow: "0 6px 16px rgba(30,143,115,0.4)" }} aria-label="Add document">
           <Icon.plus size={24} />
         </button>
       )}
@@ -509,6 +545,8 @@ function App({ familyCode, onChangeFamily }) {
       {showImport && <ImportSheet onClose={() => setShowImport(false)}
         onConfirm={(tasks, dateKey) => { addTasks(tasks, dateKey); setShowImport(false); setSelectedDate(dateKey); setTab("today"); }}
         defaultDate={selectedDate} />}
+      {showAddDoc && <AddDocSheet onClose={() => setShowAddDoc(false)} familyCode={familyCode}
+        onSave={(doc) => { persistDocs([...commonDocs, doc]); setShowAddDoc(false); }} />}
       {showProfileForm && (
         <ProfileSheet profile={editingProfile} onClose={() => { if (profiles.length > 0) { setShowProfileForm(false); setEditingProfile(null); } }}
           dismissable={profiles.length > 0} onSave={saveProfile} />
@@ -673,32 +711,42 @@ function BadgeChip({ badge, unlocked }) {
   );
 }
 
+const SUBJECT_EMOJI = {
+  Hindi: "📖", English: "📖", Maths: "🧮", Science: "🧪", EVS: "🌱", SST: "🌍",
+  Sanskrit: "📜", Computer: "💻", GK: "🧠", Art: "🎨", PE: "⚽", General: "📌",
+};
+
 function StudentBoard({ profile, dayData, onOpen }) {
   const tasks = dayData.tasks || [];
   const doneCount = tasks.filter(t => t.done).length;
   return (
-    <button onClick={onOpen} className="bg-white rounded-2xl p-4 text-left w-full transition hover:shadow-md active:scale-[0.99]" style={{ border: `1px solid ${LINE}` }}>
-      <div className="flex items-center gap-2.5 mb-3">
-        <Avatar name={profile.name} color={profile.color} size={34} />
-        <div>
-          <p className="font-display font-bold text-sm" style={{ color: INK }}>{profile.name}'s Board</p>
-          <p className="text-[11px]" style={{ color: MUTED }}>{doneCount}/{tasks.length} done today</p>
+    <button onClick={onOpen} className="rounded-2xl p-4 text-left w-full transition hover:shadow-md active:scale-[0.99]"
+      style={{ background: "#EAF6FC", border: `1px solid #D3ECF7` }}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2.5">
+          <Avatar name={profile.name} color={profile.color} size={34} />
+          <p className="font-display font-extrabold text-sm" style={{ color: INK }}>{profile.name}'s Board</p>
         </div>
+        <span className="text-[11px] font-bold px-2 py-1 rounded-full" style={{ background: "#fff", color: NAVY_SOFT }}>{doneCount}/{tasks.length}</span>
       </div>
       {tasks.length === 0 ? (
         <p className="text-xs py-5 text-center" style={{ color: MUTED }}>Nothing logged yet today.</p>
       ) : (
         <ul className="space-y-2">
-          {tasks.slice(0, 4).map(t => {
-            const s = styleFor(t.subject);
-            return (
-              <li key={t.id} className="flex items-center gap-2 rounded-lg p-2" style={{ background: t.done ? "#E1F3EC" : "#F5F8F8" }}>
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0" style={{ background: s.bg, color: s.fg }}>{t.subject}</span>
-                <span className={`text-xs flex-1 truncate ${t.done ? "line-through" : ""}`} style={{ color: t.done ? "#7C9C90" : INK }}>{t.text}</span>
-                {t.done && <Icon.check size={13} color={TEAL_DARK} />}
-              </li>
-            );
-          })}
+          {tasks.slice(0, 4).map(t => (
+            <li key={t.id} className="flex items-center gap-2.5 rounded-xl p-2.5 relative overflow-hidden" style={{ background: t.done ? "#DCF3E4" : "#fff" }}>
+              <span className="w-9 h-9 rounded-lg flex items-center justify-center text-base shrink-0" style={{ background: styleFor(t.subject).bg }}>
+                {SUBJECT_EMOJI[t.subject] || "📌"}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className={`text-xs font-semibold truncate ${t.done ? "line-through" : ""}`} style={{ color: t.done ? "#5F8C72" : INK }}>{t.text}</p>
+                <span className="inline-block text-[9px] font-bold px-1.5 py-0.5 rounded-full mt-0.5" style={{ background: t.done ? "#35C48A" : "#FFB648", color: "#fff" }}>
+                  {t.done ? "Done" : "Pending"}
+                </span>
+              </div>
+              {t.done && <span className="text-base shrink-0">🎉</span>}
+            </li>
+          ))}
         </ul>
       )}
       {tasks.length > 4 && <p className="text-[11px] mt-2 text-center" style={{ color: MUTED }}>+{tasks.length - 4} more</p>}
@@ -706,7 +754,7 @@ function StudentBoard({ profile, dayData, onOpen }) {
   );
 }
 
-function HomeView({ profiles, entriesByProfile, onOpenProfile, onGoDiary, onImport }) {
+function HomeView({ profiles, entriesByProfile, onOpenProfile, onGoDiary, onImport, onMenu, onBell }) {
   const today = todayKey();
 
   const stats = profiles.map(p => {
@@ -725,81 +773,105 @@ function HomeView({ profiles, entriesByProfile, onOpenProfile, onGoDiary, onImpo
 
   const names = profiles.map(p => p.name.split(" ")[0]);
   const greetingNames = names.length > 1 ? `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]}` : (names[0] || "");
+  const pendingCount = stats.reduce((sum, s) => sum + (s.todayTotal - s.todayDone), 0);
+
+  const outlinedTitle = {
+    WebkitTextStroke: "1.5px white",
+    textShadow: "2px 0 white,-2px 0 white,0 2px white,0 -2px white,2px 2px white,-2px -2px white,2px -2px white,-2px 2px white",
+  };
 
   return (
-    <div>
-      {/* Hero */}
-      <div className="rounded-2xl p-6 mb-5 text-center relative overflow-hidden" style={{ background: `linear-gradient(135deg, ${NAVY} 0%, ${NAVY_SOFT} 60%, ${TEAL_DARK} 130%)` }}>
-        <div className="flex justify-center mb-3"><Emblem size={56} /></div>
-        <h1 className="font-display font-extrabold text-xl text-white leading-tight">Kavi &amp; Magi School Diary</h1>
-        <p className="text-sm text-white/85 mt-2 font-display font-semibold">
-          {greetingNames ? `Hello, ${greetingNames}! Ready to learn?` : "Homework, notices, and reminders — all in one place"}
-        </p>
+    <div style={{ background: "linear-gradient(180deg, #BEE7F5 0%, #DCF3FA 55%, #FFF9EC 100%)" }}>
+      {/* Sky header */}
+      <div className="px-4 pt-6 pb-5">
+        <div className="max-w-xl mx-auto flex items-center justify-between mb-4">
+          <button onClick={onMenu} className="w-10 h-10 rounded-full bg-white/70 flex items-center justify-center active:scale-90 transition" aria-label="Menu">
+            <Icon.menu size={19} color={NAVY} />
+          </button>
+          <button onClick={onBell} className="w-10 h-10 rounded-full bg-white/70 flex items-center justify-center active:scale-90 transition relative" aria-label="Reminders">
+            <Icon.bell size={19} color={NAVY} />
+            {pendingCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-[#FF6B6B] border-2 border-[#DCF3FA]" />
+            )}
+          </button>
+        </div>
+        <div className="max-w-xl mx-auto text-center">
+          <h1 className="font-display font-extrabold text-2xl leading-tight" style={{ color: NAVY, ...outlinedTitle }}>
+            KAVI &amp; MAGI
+          </h1>
+          <p className="font-display font-extrabold text-sm -mt-1" style={{ color: TEAL_DARK, ...outlinedTitle }}>SCHOOL DIARY</p>
+          <p className="font-display font-bold text-lg mt-3" style={{ color: INK }}>
+            {greetingNames ? `Hello, ${greetingNames}!` : "Ready to learn?"}
+          </p>
+          <p className="text-sm font-semibold" style={{ color: NAVY_SOFT }}>Ready to learn?</p>
+        </div>
       </div>
 
-      {/* Student boards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
-        {stats.map(s => (
-          <StudentBoard key={s.profile.id} profile={s.profile} dayData={s.dayData} onOpen={() => onOpenProfile(s.profile.id)} />
-        ))}
-      </div>
+      <div className="max-w-xl mx-auto px-4">
+        {/* Student boards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2 relative z-10">
+          {stats.map(s => (
+            <StudentBoard key={s.profile.id} profile={s.profile} dayData={s.dayData} onOpen={() => onOpenProfile(s.profile.id)} />
+          ))}
+        </div>
 
-      {/* Mascot art */}
-      <div className="flex justify-center mb-5">
-        <img src="mascots.png" alt="" className="h-28 w-auto object-contain select-none pointer-events-none" draggable="false" />
-      </div>
+        {/* Mascot art, overlapping the boards like a sticker */}
+        <div className="flex justify-center -mt-4 mb-3 relative z-0">
+          <img src="mascots.png" alt="" className="h-32 w-auto object-contain select-none pointer-events-none drop-shadow-lg" draggable="false" />
+        </div>
 
-      {/* Quick actions */}
-      <div className="grid grid-cols-2 gap-3 mb-5">
-        <button onClick={onImport} className="bg-white rounded-2xl p-4 flex items-center gap-3 text-left transition hover:shadow-md active:scale-[0.98]" style={{ border: `1px solid ${LINE}` }}>
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: "#E4EEF7", color: NAVY_SOFT }}><Icon.chat size={18} /></div>
-          <div>
-            <p className="font-display font-bold text-sm" style={{ color: INK }}>Import WhatsApp</p>
-            <p className="text-[11px]" style={{ color: MUTED }}>Paste class messages</p>
-          </div>
-        </button>
-        <button onClick={onGoDiary} className="bg-white rounded-2xl p-4 flex items-center gap-3 text-left transition hover:shadow-md active:scale-[0.98]" style={{ border: `1px solid ${LINE}` }}>
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: "#FBF1DC", color: "#8A6300" }}><Icon.calendar size={18} /></div>
-          <div>
-            <p className="font-display font-bold text-sm" style={{ color: INK }}>Diary History</p>
-            <p className="text-[11px]" style={{ color: MUTED }}>See past days</p>
-          </div>
-        </button>
-      </div>
-
-      {/* Reward Gallery + Progress Tracker */}
-      <div className="bg-white rounded-2xl p-4 mb-3" style={{ border: `1px solid ${LINE}` }}>
-        <p className="font-display font-bold text-sm mb-3" style={{ color: NAVY }}>Reward Gallery</p>
-        {stats.map(s => (
-          <div key={s.profile.id} className="mb-3 last:mb-0">
-            <p className="text-[11px] font-bold mb-2" style={{ color: MUTED }}>{s.profile.name}</p>
-            <div className="flex gap-3 overflow-x-auto pb-1">
-              {BADGES.map(b => <BadgeChip key={b.id} badge={b} unlocked={b.test(s)} />)}
+        {/* Quick actions */}
+        <div className="grid grid-cols-2 gap-3 mb-5">
+          <button onClick={onImport} className="bg-white rounded-2xl p-4 flex items-center gap-3 text-left transition hover:shadow-md active:scale-[0.98]" style={{ border: `1px solid ${LINE}` }}>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: "#E4EEF7", color: NAVY_SOFT }}><Icon.chat size={18} /></div>
+            <div>
+              <p className="font-display font-bold text-sm" style={{ color: INK }}>Import WhatsApp</p>
+              <p className="text-[11px]" style={{ color: MUTED }}>Paste class messages</p>
             </div>
-          </div>
-        ))}
-      </div>
+          </button>
+          <button onClick={onGoDiary} className="bg-white rounded-2xl p-4 flex items-center gap-3 text-left transition hover:shadow-md active:scale-[0.98]" style={{ border: `1px solid ${LINE}` }}>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: "#FBF1DC", color: "#8A6300" }}><Icon.calendar size={18} /></div>
+            <div>
+              <p className="font-display font-bold text-sm" style={{ color: INK }}>Diary History</p>
+              <p className="text-[11px]" style={{ color: MUTED }}>See past days</p>
+            </div>
+          </button>
+        </div>
 
-      <div className="bg-white rounded-2xl p-4" style={{ border: `1px solid ${LINE}` }}>
-        <p className="font-display font-bold text-sm mb-3" style={{ color: NAVY }}>Progress Tracker</p>
-        <div className="space-y-3">
-          {stats.map(s => {
-            const pct = s.todayTotal ? Math.round((s.todayDone / s.todayTotal) * 100) : 0;
-            return (
-              <div key={s.profile.id} className="flex items-center gap-3">
-                <Avatar name={s.profile.name} color={s.profile.color} size={30} />
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-semibold" style={{ color: INK }}>{s.profile.name}</span>
-                    <span className="text-[11px]" style={{ color: MUTED }}>{s.todayDone}/{s.todayTotal} today</span>
-                  </div>
-                  <div className="h-2 rounded-full" style={{ background: "#EDEFEF" }}>
-                    <div className="h-2 rounded-full transition-all" style={{ width: `${pct}%`, background: s.profile.color || TEAL }} />
+        {/* Reward Gallery + Progress Tracker */}
+        <div className="bg-white rounded-2xl p-4 mb-3" style={{ border: `1px solid ${LINE}` }}>
+          <p className="font-display font-bold text-sm mb-3" style={{ color: NAVY }}>Reward Gallery</p>
+          {stats.map(s => (
+            <div key={s.profile.id} className="mb-3 last:mb-0">
+              <p className="text-[11px] font-bold mb-2" style={{ color: MUTED }}>{s.profile.name}</p>
+              <div className="flex gap-3 overflow-x-auto pb-1">
+                {BADGES.map(b => <BadgeChip key={b.id} badge={b} unlocked={b.test(s)} />)}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="bg-white rounded-2xl p-4 pb-5" style={{ border: `1px solid ${LINE}` }}>
+          <p className="font-display font-bold text-sm mb-3" style={{ color: NAVY }}>Progress Tracker</p>
+          <div className="space-y-3">
+            {stats.map(s => {
+              const pct = s.todayTotal ? Math.round((s.todayDone / s.todayTotal) * 100) : 0;
+              return (
+                <div key={s.profile.id} className="flex items-center gap-3">
+                  <Avatar name={s.profile.name} color={s.profile.color} size={30} />
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-semibold" style={{ color: INK }}>{s.profile.name}</span>
+                      <span className="text-[11px]" style={{ color: MUTED }}>{s.todayDone}/{s.todayTotal} today</span>
+                    </div>
+                    <div className="h-2 rounded-full" style={{ background: "#EDEFEF" }}>
+                      <div className="h-2 rounded-full transition-all" style={{ width: `${pct}%`, background: s.profile.color || TEAL }} />
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>
@@ -1034,6 +1106,87 @@ function ImportSheet({ onClose, onConfirm, defaultDate }) {
     </Sheet>
   );
 }
+
+/* ============ Docs tab — shared family documents (forms, notices, etc.) ============ */
+function DocsView({ docs, onAdd, onDelete }) {
+  return (
+    <div>
+      <h2 className="font-display font-bold mb-3 text-lg" style={{ color: NAVY }}>Shared Documents</h2>
+      <p className="text-xs mb-4" style={{ color: MUTED }}>
+        Keep school forms, notices, syllabus copies, and other files here — anything that isn't tied to a single day's homework.
+      </p>
+      {docs.length === 0 ? (
+        <div className="bg-white rounded-2xl p-8 text-center" style={{ border: `1px solid ${LINE}` }}>
+          <Icon.folder size={26} color={NAVY} />
+          <p className="font-display font-bold mt-3" style={{ color: NAVY }}>No documents yet</p>
+          <p className="text-sm mt-1 mb-4" style={{ color: MUTED }}>Upload school forms, notices, or anything worth keeping handy.</p>
+          <button onClick={onAdd} className="px-4 py-2.5 rounded-full text-white text-sm font-bold inline-flex items-center gap-1.5" style={{ background: NAVY }}>
+            <Icon.plus size={15} /> Add document
+          </button>
+        </div>
+      ) : (
+        <ul className="space-y-2.5">
+          {docs.map(d => (
+            <li key={d.id} className="bg-white rounded-xl px-3 py-3 flex items-center gap-3" style={{ border: `1px solid ${LINE}` }}>
+              <span className="text-[10px] font-extrabold px-2 py-1 rounded-md shrink-0" style={{ background: fileBadgeColor(d.kind), color: INK }}>
+                {fileBadgeLabel(d.kind)}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm truncate" style={{ color: INK }}>{d.name}</p>
+                <AttachmentChip attachment={d} />
+              </div>
+              <button onClick={() => onDelete(d.id)} className="shrink-0 active:scale-90" style={{ color: "#C7CFD1" }}><Icon.trash size={16} /></button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function AddDocSheet({ onClose, onSave, familyCode }) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const inputRef = useRef(null);
+
+  const handleFile = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setError("");
+    if (file.size > MAX_FILE_MB * 1024 * 1024) { setError(`File is too big (max ${MAX_FILE_MB}MB).`); return; }
+    if (!familyCode) { setError("Shared documents need cloud sync to be set up (Supabase). This device is running in local-only mode."); return; }
+
+    setUploading(true);
+    try {
+      const path = `${familyCode}/docs/${uid()}-${file.name}`;
+      const { error: uploadError } = await sb.storage.from(ATTACHMENTS_BUCKET).upload(path, file);
+      if (uploadError) throw uploadError;
+      const { data } = sb.storage.from(ATTACHMENTS_BUCKET).getPublicUrl(path);
+      onSave({ id: uid(), name: file.name, url: data.publicUrl, type: file.type, size: file.size, kind: fileKind(file.type, file.name) });
+    } catch (err) {
+      console.error("Document upload failed:", err);
+      setError(`Upload failed — ${err.message || "check your Supabase Storage setup"}.`);
+    }
+    setUploading(false);
+  };
+
+  return (
+    <Sheet onClose={onClose} title="Add a document">
+      <p className="text-xs mb-3" style={{ color: MUTED }}>
+        Photos, PDFs, Word or Excel files — anything the whole family might need to find again later.
+      </p>
+      <input ref={inputRef} type="file" accept={ACCEPTED_FILE_TYPES} onChange={handleFile} className="hidden" />
+      <button onClick={() => inputRef.current?.click()} disabled={uploading}
+        className="w-full py-6 rounded-xl text-sm font-bold flex flex-col items-center justify-center gap-2 disabled:opacity-50"
+        style={{ background: "#F5F8F8", color: NAVY, border: `1.5px dashed ${LINE}` }}>
+        <Icon.paperclip size={20} />
+        {uploading ? "Uploading…" : "Choose a file to upload"}
+      </button>
+      {error && <p className="text-[11px] mt-2" style={{ color: "#B7551E" }}>{error}</p>}
+    </Sheet>
+  );
+}
+
 
 function ProfileSheet({ profile, onClose, onSave, dismissable = true }) {
   const [name, setName] = useState(profile?.name || "");
