@@ -374,10 +374,11 @@ function Root() {
 
 function CenterLoading({ text }) {
   return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: PAPER }}>
-      <div className="flex flex-col items-center gap-3">
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden" style={{ background: "linear-gradient(180deg, #BEE7F5 0%, #DCF3FA 45%, #FFF9EC 100%)" }}>
+      <KidsBackdrop />
+      <div className="relative z-10 flex flex-col items-center gap-3">
         <Emblem size={52} />
-        <p className="text-sm" style={{ color: MUTED }}>{text}</p>
+        <p className="text-sm font-semibold" style={{ color: NAVY_SOFT }}>{text}</p>
       </div>
     </div>
   );
@@ -412,12 +413,13 @@ function FamilyCodeGate({ onReady }) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: PAPER }}>
-      <div className="bg-white rounded-2xl p-6 max-w-sm w-full" style={{ border: `1px solid ${LINE}` }}>
+    <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden" style={{ background: "linear-gradient(180deg, #BEE7F5 0%, #DCF3FA 45%, #FFF9EC 100%)" }}>
+      <KidsBackdrop />
+      <div className="relative z-10 bg-white rounded-3xl p-6 max-w-sm w-full shadow-lg" style={{ border: `1px solid ${LINE}` }}>
         <div className="flex justify-center mb-4"><Emblem size={56} /></div>
-        <h1 className="font-display font-bold text-lg text-center mb-1" style={{ color: NAVY }}>Kavi &amp; Magi School Diary</h1>
+        <h1 className="font-display font-extrabold text-lg text-center mb-1" style={{ color: NAVY }}>Kavi &amp; Magi School Diary</h1>
         <p className="text-sm text-center mb-5" style={{ color: MUTED }}>
-          Set up once, then open the same diary from any device.
+          Set up once, then open the same diary from any device. 🎒
         </p>
 
         {!mode && (
@@ -600,37 +602,38 @@ function App({ familyCode, onChangeFamily }) {
   if (profiles.length > 0 && !activeProfile) return <CenterLoading text="Loading profile…" />;
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: PAPER, color: INK }}>
+    <div className="min-h-screen flex flex-col relative overflow-hidden" style={{ background: "linear-gradient(180deg, #BEE7F5 0%, #DCF3FA 45%, #FFF9EC 100%)", color: INK }}>
+      <KidsBackdrop />
       {tab !== "home" && (
-        <header className="sticky top-0 z-20 px-4 pt-5 pb-4" style={{ background: `linear-gradient(135deg, ${NAVY} 0%, ${NAVY_SOFT} 100%)` }}>
+        <header className="relative z-20 sticky top-0 px-4 pt-5 pb-4" style={{ background: "linear-gradient(180deg, rgba(190,231,245,0.97) 0%, rgba(220,243,250,0.9) 100%)", backdropFilter: "blur(8px)" }}>
           <div className="max-w-xl mx-auto flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
               <Emblem />
               <div>
-                <p className="text-[10px] uppercase tracking-[0.18em] font-bold" style={{ color: "#8FB8CE" }}>Kavi &amp; Magi</p>
-                <h1 className="font-display font-bold text-lg leading-tight text-white -mt-0.5">
-                  {activeProfile ? `Hi, ${activeProfile.name.split(" ")[0]}` : "School Diary"}
+                <p className="text-[10px] uppercase tracking-[0.18em] font-bold" style={{ color: TEAL_DARK }}>Kavi &amp; Magi</p>
+                <h1 className="font-display font-extrabold text-lg leading-tight -mt-0.5" style={{ color: NAVY }}>
+                  {activeProfile ? `Hi, ${activeProfile.name.split(" ")[0]}! 👋` : "School Diary"}
                 </h1>
               </div>
             </div>
             <div className="flex items-center gap-2">
               {familyCode && (
-                <span className="text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1" style={{ background: "rgba(255,255,255,0.12)", color: syncing ? "#F5D08A" : "#8FE3C9" }}>
+                <span className="text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1 bg-white/70" style={{ color: syncing ? "#8A6300" : TEAL_DARK }}>
                   <Icon.cloud size={11} /> {syncing ? "Syncing…" : "Synced"}
                 </span>
               )}
               <button onClick={() => setShowProfileSwitcher(true)} className="active:scale-90 transition" aria-label="Switch profile">
-                {activeProfile ? <Avatar name={activeProfile.name} color={activeProfile.color} size={38} ring /> : <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(255,255,255,0.12)" }}><Icon.user size={18} color="#fff" /></div>}
+                {activeProfile ? <Avatar name={activeProfile.name} color={activeProfile.color} size={38} ring /> : <div className="w-10 h-10 rounded-full flex items-center justify-center bg-white/70"><Icon.user size={18} color={NAVY} /></div>}
               </button>
             </div>
           </div>
           {activeProfile && (
             <div className="max-w-xl mx-auto flex items-center gap-2">
-              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.12)", color: "#CFE3EC" }}>
+              <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-white/70" style={{ color: NAVY_SOFT }}>
                 Class {activeProfile.className}{activeProfile.section ? `-${activeProfile.section}` : ""}
               </span>
               {profiles.length > 1 && (
-                <button onClick={() => setShowProfileSwitcher(true)} className="text-[11px] font-bold flex items-center gap-1" style={{ color: "#8FE3C9" }}>
+                <button onClick={() => setShowProfileSwitcher(true)} className="text-[11px] font-bold flex items-center gap-1" style={{ color: TEAL_DARK }}>
                   <Icon.swap size={12} /> Switch student
                 </button>
               )}
@@ -639,7 +642,7 @@ function App({ familyCode, onChangeFamily }) {
         </header>
       )}
 
-      <main className={`flex-1 overflow-y-auto pb-28 max-w-xl w-full mx-auto ${tab === "home" ? "" : "px-4 pt-5"}`}>
+      <main className={`relative z-10 flex-1 overflow-y-auto pb-28 max-w-xl w-full mx-auto ${tab === "home" ? "" : "px-4 pt-5"}`}>
         {tab === "home" && (
           <HomeView profiles={profiles} entriesByProfile={entriesByProfile}
             onOpenProfile={(id) => { setActiveProfileId(id); setTab("today"); }}
@@ -661,7 +664,7 @@ function App({ familyCode, onChangeFamily }) {
         {tab === "planner" && <PlannerView />}
       </main>
 
-      <nav className="fixed bottom-0 inset-x-0 z-20 bg-white px-6" style={{ borderTop: `1px solid ${LINE}`, boxShadow: "0 -4px 16px rgba(15,46,76,0.06)" }}>
+      <nav className="fixed bottom-0 inset-x-0 z-20 bg-white/95 px-6 rounded-t-3xl" style={{ backdropFilter: "blur(8px)", boxShadow: "0 -6px 20px rgba(15,46,76,0.12)" }}>
         <div className="max-w-xl mx-auto flex justify-around py-2.5">
           <NavBtn icon={<Icon.home size={20} />} label="Home" active={tab === "home"} onClick={() => setTab("home")} bg="#CFE6F9" fg={NAVY_SOFT} />
           <NavBtn icon={<Icon.book size={20} />} label="Today" active={tab === "today"} onClick={() => setTab("today")} bg="#CDEEDC" fg={TEAL_DARK} />
@@ -1158,7 +1161,7 @@ function TodayView({ selectedDate, setSelectedDate, dayData, historyDates = [], 
 
       {tasks.length > 0 && (
         <p className="font-display font-extrabold text-sm mb-3 flex items-center gap-1.5" style={{ color: NAVY }}>
-          <Icon.calendar size={15} color={NAVY} /> TODAY'S TASKS ({tasks.length})
+          <Icon.calendar size={15} color={NAVY} /> TODAY'S TASKS ({tasks.length}) 🎈
         </p>
       )}
 
@@ -1226,7 +1229,7 @@ function TodayView({ selectedDate, setSelectedDate, dayData, historyDates = [], 
 function DiaryView({ historyDates, entries, onOpen }) {
   return (
     <div>
-      <h2 className="font-display font-bold mb-3 text-lg" style={{ color: NAVY }}>Past entries</h2>
+      <h2 className="font-display font-extrabold mb-3 text-lg" style={{ color: NAVY }}>📔 Past entries</h2>
       {historyDates.length === 0 ? (
         <div className="bg-white rounded-2xl p-8 text-center" style={{ border: `1px solid ${LINE}` }}>
           <Icon.calendar size={26} color={NAVY} />
@@ -1397,10 +1400,10 @@ function PlannerView() {
 
   return (
     <div>
-      <div className="rounded-2xl p-5 mb-5 text-white" style={{ background: `linear-gradient(135deg, ${NAVY}, ${NAVY_SOFT})` }}>
-        <p className="text-[10px] uppercase tracking-[0.18em] font-bold" style={{ color: "#8FB8CE" }}>Annual Planner</p>
+      <div className="rounded-3xl p-5 mb-5 text-white relative overflow-hidden" style={{ background: `linear-gradient(135deg, ${TEAL}, ${TEAL_DARK})`, boxShadow: "0 6px 16px rgba(30,143,115,0.3)" }}>
+        <p className="text-[10px] uppercase tracking-[0.18em] font-bold" style={{ color: "#CDEEDC" }}>🗓️ Annual Planner</p>
         <h2 className="font-display font-extrabold text-xl mt-0.5">School Year 2026</h2>
-        <p className="text-xs mt-1" style={{ color: "#CFE3EC" }}>Holidays &amp; vacations at a glance</p>
+        <p className="text-xs mt-1" style={{ color: "#DFF6EB" }}>Holidays &amp; vacations at a glance ✨</p>
       </div>
 
       <h3 className="font-display font-bold mb-2.5 text-sm uppercase tracking-wide" style={{ color: MUTED }}>Vacations &amp; breaks</h3>
@@ -1472,7 +1475,7 @@ function PlannerView() {
 function DocsView({ docs, onAdd, onDelete }) {
   return (
     <div>
-      <h2 className="font-display font-bold mb-3 text-lg" style={{ color: NAVY }}>Shared Documents</h2>
+      <h2 className="font-display font-extrabold mb-3 text-lg" style={{ color: NAVY }}>🗂️ Shared Documents</h2>
       <p className="text-xs mb-4" style={{ color: MUTED }}>
         Keep school forms, notices, syllabus copies, and other files here — anything that isn't tied to a single day's homework.
       </p>
