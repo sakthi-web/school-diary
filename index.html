@@ -95,6 +95,55 @@ const KNOWN_SUBJECTS = Object.keys(SUBJECT_STYLES).filter(s => s !== "General");
 const styleFor = (s) => SUBJECT_STYLES[s] || SUBJECT_STYLES.General;
 const PROFILE_COLORS = ["#1E8F73", "#5A3F94", "#B7551E", "#1B4A73", "#A32E6B"];
 
+/* ============ Annual planner data (Kendriya Vidyalaya, calendar year 2026) ============ */
+const HOLIDAY_TYPES = {
+  CH:      { label: "Closed Holiday",        bg: "#E1F3EC", fg: "#166B57" },
+  DH:      { label: "Discretionary Holiday", bg: "#FBEAC0", fg: "#8A6300" },
+  CGEWCC:  { label: "CGEWCC",                bg: "#E4EEF7", fg: "#1B4A73" },
+  RH:      { label: "Restricted Holiday",    bg: "#EDEFEF", fg: "#5C6B71" },
+};
+const PLANNER_HOLIDAYS = [
+  { date: "2026-01-15", name: "Pongal", type: "CGEWCC" },
+  { date: "2026-01-16", name: "Thiruvalluvar Day", type: "DH" },
+  { date: "2026-01-17", name: "Uzhavar Thirunaal", type: "DH" },
+  { date: "2026-01-26", name: "Republic Day", type: "CH" },
+  { date: "2026-03-04", name: "Holi", type: "DH" },
+  { date: "2026-03-21", name: "Id'ul Fitr (Ramzan)", type: "DH" },
+  { date: "2026-03-31", name: "Mahavir Jayanthi", type: "CH" },
+  { date: "2026-04-03", name: "Good Friday", type: "CH" },
+  { date: "2026-05-01", name: "Buddha Purnima", type: "CH" },
+  { date: "2026-05-28", name: "Id-ul-Zuha (Bakrid)", type: "CH" },
+  { date: "2026-06-26", name: "Muharram", type: "CH" },
+  { date: "2026-08-15", name: "Independence Day", type: "CH" },
+  { date: "2026-08-26", name: "Milad-un-Nabi / Id-e-Milad", type: "CH" },
+  { date: "2026-09-14", name: "Vinayaka Chaturthi", type: "CGEWCC" },
+  { date: "2026-10-02", name: "Mahatma Gandhi Jayanthi", type: "CH" },
+  { date: "2026-10-19", name: "Maha Navami", type: "CGEWCC" },
+  { date: "2026-10-20", name: "Dussehra (Vijaya Dasami)", type: "CH" },
+  { date: "2026-11-08", name: "Diwali (Deepavali)", type: "CH" },
+  { date: "2026-11-09", name: "Govardhan Pooja", type: "CH" },
+  { date: "2026-11-11", name: "Bhai Duj", type: "DH" },
+  { date: "2026-11-24", name: "Guru Nanak Jayanthi", type: "CH" },
+  { date: "2026-12-25", name: "Christmas Day", type: "CH" },
+];
+const PLANNER_RESTRICTED_NOTES = [
+  "A day after Sports Meet",
+  "A day after Annual Day celebrations",
+];
+const PLANNER_BREAKS = [
+  { name: "Summer Vacation", from: "2026-05-03", to: "2026-06-20", days: 49 },
+  { name: "Autumn Break", from: "2026-10-15", to: "2026-10-24", days: 10 },
+  { name: "Winter Break", from: "2026-12-23", to: "2027-01-02", days: 11 },
+];
+const plannerPretty = (key) => {
+  const d = new Date(key + "T00:00:00");
+  return d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+};
+const plannerMonthLabel = (key) => {
+  const d = new Date(key + "T00:00:00");
+  return d.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+};
+
 /* ============ Date helpers ============ */
 const todayKey = (d = new Date()) => {
   const y = d.getFullYear();
@@ -609,6 +658,7 @@ function App({ familyCode, onChangeFamily }) {
           <DocsView docs={commonDocs} onAdd={() => setShowAddDoc(true)}
             onDelete={(id) => persistDocs(commonDocs.filter(d => d.id !== id))} />
         )}
+        {tab === "planner" && <PlannerView />}
       </main>
 
       <nav className="fixed bottom-0 inset-x-0 z-20 bg-white px-6" style={{ borderTop: `1px solid ${LINE}`, boxShadow: "0 -4px 16px rgba(15,46,76,0.06)" }}>
@@ -617,6 +667,7 @@ function App({ familyCode, onChangeFamily }) {
           <NavBtn icon={<Icon.book size={20} />} label="Today" active={tab === "today"} onClick={() => setTab("today")} bg="#CDEEDC" fg={TEAL_DARK} />
           <NavBtn icon={<Icon.calendar size={20} />} label="Diary" active={tab === "diary"} onClick={() => setTab("diary")} bg="#FBEAC0" fg="#8A6300" />
           <NavBtn icon={<Icon.folder size={20} />} label="Docs" active={tab === "docs"} onClick={() => setTab("docs")} bg="#E2D9F8" fg="#5A3F94" />
+          <NavBtn icon={<Icon.clip size={20} />} label="Planner" active={tab === "planner"} onClick={() => setTab("planner")} bg="#CFE6F9" fg={NAVY_SOFT} />
         </div>
       </nav>
 
@@ -1328,6 +1379,92 @@ function ImportSheet({ onClose, onConfirm, defaultDate }) {
         </>
       )}
     </Sheet>
+  );
+}
+
+/* ============ Planner tab — annual school holiday planner ============ */
+function PlannerView() {
+  const today = todayKey();
+  const groupedByMonth = useMemo(() => {
+    const groups = {};
+    for (const h of PLANNER_HOLIDAYS) {
+      const monthKey = h.date.slice(0, 7);
+      if (!groups[monthKey]) groups[monthKey] = [];
+      groups[monthKey].push(h);
+    }
+    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+  }, []);
+
+  return (
+    <div>
+      <div className="rounded-2xl p-5 mb-5 text-white" style={{ background: `linear-gradient(135deg, ${NAVY}, ${NAVY_SOFT})` }}>
+        <p className="text-[10px] uppercase tracking-[0.18em] font-bold" style={{ color: "#8FB8CE" }}>Annual Planner</p>
+        <h2 className="font-display font-extrabold text-xl mt-0.5">School Year 2026</h2>
+        <p className="text-xs mt-1" style={{ color: "#CFE3EC" }}>Holidays &amp; vacations at a glance</p>
+      </div>
+
+      <h3 className="font-display font-bold mb-2.5 text-sm uppercase tracking-wide" style={{ color: MUTED }}>Vacations &amp; breaks</h3>
+      <div className="space-y-2.5 mb-6">
+        {PLANNER_BREAKS.map((b) => (
+          <div key={b.name} className="bg-white rounded-2xl p-4 flex items-center justify-between" style={{ border: `1px solid ${LINE}` }}>
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: "#E1F3EC" }}>
+                <Icon.calendar size={18} color={TEAL_DARK} />
+              </div>
+              <div>
+                <p className="font-display font-bold text-sm" style={{ color: INK }}>{b.name}</p>
+                <p className="text-xs" style={{ color: MUTED }}>{plannerPretty(b.from)} — {plannerPretty(b.to)}</p>
+              </div>
+            </div>
+            <span className="text-[11px] font-extrabold px-2.5 py-1 rounded-full shrink-0" style={{ background: "#E1F3EC", color: TEAL_DARK }}>
+              {b.days} days
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <h3 className="font-display font-bold mb-2.5 text-sm uppercase tracking-wide" style={{ color: MUTED }}>Holiday list</h3>
+      <div className="space-y-5">
+        {groupedByMonth.map(([monthKey, items]) => (
+          <div key={monthKey}>
+            <p className="font-display font-bold text-xs mb-2 px-1" style={{ color: NAVY_SOFT }}>{plannerMonthLabel(items[0].date)}</p>
+            <ul className="bg-white rounded-2xl overflow-hidden" style={{ border: `1px solid ${LINE}` }}>
+              {items.map((h, i) => {
+                const t = HOLIDAY_TYPES[h.type];
+                const isPast = h.date < today;
+                return (
+                  <li key={h.date + h.name} className="flex items-center gap-3 px-3.5 py-3"
+                    style={{ borderTop: i === 0 ? "none" : `1px solid ${LINE}`, opacity: isPast ? 0.5 : 1 }}>
+                    <div className="w-11 shrink-0 text-center">
+                      <p className="font-display font-extrabold text-base leading-none" style={{ color: NAVY }}>
+                        {new Date(h.date + "T00:00:00").getDate()}
+                      </p>
+                      <p className="text-[10px] font-bold uppercase mt-0.5" style={{ color: MUTED }}>
+                        {new Date(h.date + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short" })}
+                      </p>
+                    </div>
+                    <p className="flex-1 text-sm" style={{ color: INK }}>{h.name}</p>
+                    <span className="text-[10px] font-extrabold px-2 py-1 rounded-md shrink-0" style={{ background: t.bg, color: t.fg }}>
+                      {h.type}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-6 bg-white rounded-2xl p-4" style={{ border: `1px solid ${LINE}` }}>
+        <p className="text-xs font-bold mb-2" style={{ color: MUTED }}>Restricted holidays (earmarked)</p>
+        <ul className="text-xs space-y-1" style={{ color: MUTED }}>
+          {PLANNER_RESTRICTED_NOTES.map((n) => <li key={n}>• {n}</li>)}
+        </ul>
+        <p className="text-[10px] mt-3" style={{ color: "#8FA1A6" }}>
+          DH = Discretionary Holiday · CH = Closed Holiday · CGEWCC = Central Govt Employees Welfare Coordination Committee day
+        </p>
+      </div>
+    </div>
   );
 }
 
