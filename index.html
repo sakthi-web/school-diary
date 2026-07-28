@@ -247,6 +247,8 @@ const Icon = {
   menu: (p) => <svg viewBox="0 0 24 24" width={p.size||18} height={p.size||18} fill="none" stroke={p.color||"currentColor"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>,
   bell: (p) => <svg viewBox="0 0 24 24" width={p.size||18} height={p.size||18} fill="none" stroke={p.color||"currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>,
   folder: (p) => <svg viewBox="0 0 24 24" width={p.size||18} height={p.size||18} fill="none" stroke={p.color||"currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>,
+  search: (p) => <svg viewBox="0 0 24 24" width={p.size||18} height={p.size||18} fill="none" stroke={p.color||"currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>,
+  globe: (p) => <svg viewBox="0 0 24 24" width={p.size||18} height={p.size||18} fill="none" stroke={p.color||"currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg>,
   download: (p) => <svg viewBox="0 0 24 24" width={p.size||18} height={p.size||18} fill="none" stroke={p.color||"currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12m0 0-4-4m4 4 4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>,
 };
 
@@ -602,8 +604,7 @@ function App({ familyCode, onChangeFamily }) {
   if (profiles.length > 0 && !activeProfile) return <CenterLoading text="Loading profile…" />;
 
   return (
-    <div className="min-h-screen flex flex-col relative overflow-hidden" style={{ background: "linear-gradient(180deg, #BEE7F5 0%, #DCF3FA 45%, #FFF9EC 100%)", color: INK }}>
-      <KidsBackdrop />
+    <div className="min-h-screen flex flex-col relative overflow-hidden" style={{ background: "#FFFFFF", color: INK }}>
       {tab !== "home" && (
         <header className="relative z-20 sticky top-0 px-4 pt-5 pb-4" style={{ background: "linear-gradient(180deg, rgba(190,231,245,0.97) 0%, rgba(220,243,250,0.9) 100%)", backdropFilter: "blur(8px)" }}>
           <div className="max-w-xl mx-auto flex items-center justify-between mb-3">
@@ -904,6 +905,8 @@ function StudentBoard({ profile, dayData, onOpen }) {
 
 function HomeView({ profiles, entriesByProfile, onOpenProfile, onGoDiary, onImport, onMenu, onBell }) {
   const today = todayKey();
+  const [showDictionary, setShowDictionary] = useState(false);
+  const [showTranslator, setShowTranslator] = useState(false);
 
   const stats = profiles.map(p => {
     const profileEntries = entriesByProfile[p.id] || {};
@@ -1001,6 +1004,20 @@ function HomeView({ profiles, entriesByProfile, onOpenProfile, onGoDiary, onImpo
               <p className="text-[11px]" style={{ color: MUTED }}>See past days</p>
             </div>
           </button>
+          <button onClick={() => setShowDictionary(true)} className="bg-white rounded-2xl p-4 flex items-center gap-3 text-left transition hover:shadow-md active:scale-[0.98]" style={{ border: `1px solid ${LINE}` }}>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: "#E1F3EC", color: TEAL_DARK }}><Icon.search size={18} /></div>
+            <div>
+              <p className="font-display font-bold text-sm" style={{ color: INK }}>Dictionary</p>
+              <p className="text-[11px]" style={{ color: MUTED }}>Look up a word</p>
+            </div>
+          </button>
+          <button onClick={() => setShowTranslator(true)} className="bg-white rounded-2xl p-4 flex items-center gap-3 text-left transition hover:shadow-md active:scale-[0.98]" style={{ border: `1px solid ${LINE}` }}>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: "#FDECE3", color: "#B7551E" }}><Icon.globe size={18} /></div>
+            <div>
+              <p className="font-display font-bold text-sm" style={{ color: INK }}>Translator</p>
+              <p className="text-[11px]" style={{ color: MUTED }}>English · Tamil · Hindi</p>
+            </div>
+          </button>
         </div>
 
         {/* Student boards */}
@@ -1009,43 +1026,10 @@ function HomeView({ profiles, entriesByProfile, onOpenProfile, onGoDiary, onImpo
             <StudentBoard key={s.profile.id} profile={s.profile} dayData={s.dayData} onOpen={() => onOpenProfile(s.profile.id)} />
           ))}
         </div>
-
-        {/* Reward Gallery + Progress Tracker */}
-        <div className="bg-white rounded-2xl p-4 mb-3" style={{ border: `1px solid ${LINE}` }}>
-          <p className="font-display font-bold text-sm mb-3" style={{ color: NAVY }}>Reward Gallery</p>
-          {stats.map(s => (
-            <div key={s.profile.id} className="mb-3 last:mb-0">
-              <p className="text-[11px] font-bold mb-2" style={{ color: MUTED }}>{s.profile.name}</p>
-              <div className="flex gap-3 overflow-x-auto pb-1">
-                {BADGES.map(b => <BadgeChip key={b.id} badge={b} unlocked={b.test(s)} />)}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="bg-white rounded-2xl p-4 pb-5" style={{ border: `1px solid ${LINE}` }}>
-          <p className="font-display font-bold text-sm mb-3" style={{ color: NAVY }}>Progress Tracker</p>
-          <div className="space-y-3">
-            {stats.map(s => {
-              const pct = s.todayTotal ? Math.round((s.todayDone / s.todayTotal) * 100) : 0;
-              return (
-                <div key={s.profile.id} className="flex items-center gap-3">
-                  <Avatar name={s.profile.name} color={s.profile.color} size={30} />
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-semibold" style={{ color: INK }}>{s.profile.name}</span>
-                      <span className="text-[11px]" style={{ color: MUTED }}>{s.todayDone}/{s.todayTotal} today</span>
-                    </div>
-                    <div className="h-2 rounded-full" style={{ background: "#EDEFEF" }}>
-                      <div className="h-2 rounded-full transition-all" style={{ width: `${pct}%`, background: s.profile.color || TEAL }} />
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
       </div>
+
+      {showDictionary && <DictionarySheet onClose={() => setShowDictionary(false)} />}
+      {showTranslator && <TranslatorSheet onClose={() => setShowTranslator(false)} />}
     </div>
   );
 }
@@ -1547,6 +1531,168 @@ function AddDocSheet({ onClose, onSave, familyCode }) {
         {uploading ? "Uploading…" : "Choose a file to upload"}
       </button>
       {error && <p className="text-[11px] mt-2" style={{ color: "#B7551E" }}>{error}</p>}
+    </Sheet>
+  );
+}
+
+/* ============ Dictionary (Free Dictionary API — no key needed) ============ */
+function DictionarySheet({ onClose }) {
+  const [word, setWord] = useState("");
+  const [entries, setEntries] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const lookup = async () => {
+    const q = word.trim();
+    if (!q) return;
+    setLoading(true);
+    setError("");
+    setEntries(null);
+    try {
+      const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(q)}`);
+      if (res.status === 404) { setError(`No definition found for "${q}". Check the spelling and try again.`); setLoading(false); return; }
+      if (!res.ok) throw new Error(`Request failed (${res.status})`);
+      const data = await res.json();
+      setEntries(data);
+    } catch (e) {
+      console.error("Dictionary lookup failed:", e);
+      setError("Couldn't look that up — check your internet connection and try again.");
+    }
+    setLoading(false);
+  };
+
+  return (
+    <Sheet onClose={onClose} title="Dictionary">
+      <div className="flex gap-2 mb-4">
+        <input value={word} onChange={(e) => setWord(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") lookup(); }}
+          placeholder="Type a word, e.g. photosynthesis"
+          className="flex-1 rounded-xl p-3 text-sm focus:outline-none" style={{ border: `2px solid ${LINE}` }} />
+        <button onClick={lookup} disabled={!word.trim() || loading}
+          className="w-12 h-12 rounded-xl text-white flex items-center justify-center shrink-0 disabled:opacity-40" style={{ background: NAVY }}>
+          <Icon.search size={18} />
+        </button>
+      </div>
+
+      {loading && <p className="text-sm text-center py-6" style={{ color: MUTED }}>Looking it up…</p>}
+      {error && <p className="text-sm text-center py-4" style={{ color: "#B7551E" }}>{error}</p>}
+
+      {!loading && !error && !entries && (
+        <div className="text-center py-6">
+          <Icon.search size={26} color={NAVY} />
+          <p className="text-sm mt-2" style={{ color: MUTED }}>Search any English word for its meaning, pronunciation, and examples.</p>
+        </div>
+      )}
+
+      {entries && (
+        <div className="max-h-[55vh] overflow-y-auto space-y-4 -mx-1 px-1">
+          {entries.map((entry, i) => (
+            <div key={i}>
+              <div className="flex items-baseline gap-2 mb-2">
+                <p className="font-display font-extrabold text-lg" style={{ color: NAVY }}>{entry.word}</p>
+                {entry.phonetic && <p className="text-sm" style={{ color: MUTED }}>{entry.phonetic}</p>}
+              </div>
+              {(entry.meanings || []).map((m, mi) => (
+                <div key={mi} className="mb-3">
+                  <span className="text-[11px] font-extrabold px-2 py-1 rounded-full" style={{ background: "#E1F3EC", color: TEAL_DARK }}>{m.partOfSpeech}</span>
+                  <ul className="mt-2 space-y-2">
+                    {(m.definitions || []).slice(0, 3).map((d, di) => (
+                      <li key={di} className="text-sm" style={{ color: INK }}>
+                        <span style={{ color: MUTED }}>{di + 1}.</span> {d.definition}
+                        {d.example && <p className="text-xs italic mt-0.5" style={{ color: MUTED }}>"{d.example}"</p>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
+/* ============ Translator (MyMemory API — no key needed) ============ */
+const TRANSLATE_LANGS = [
+  { code: "en", label: "English" },
+  { code: "ta", label: "Tamil" },
+  { code: "hi", label: "Hindi" },
+];
+
+function TranslatorSheet({ onClose }) {
+  const [from, setFrom] = useState("en");
+  const [to, setTo] = useState("ta");
+  const [text, setText] = useState("");
+  const [result, setResult] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const swapLangs = () => { setFrom(to); setTo(from); setResult(""); };
+
+  const translate = async () => {
+    const q = text.trim();
+    if (!q) return;
+    setLoading(true);
+    setError("");
+    setResult("");
+    try {
+      const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(q)}&langpair=${from}|${to}`);
+      if (!res.ok) throw new Error(`Request failed (${res.status})`);
+      const data = await res.json();
+      const translated = data?.responseData?.translatedText;
+      if (!translated) throw new Error("No translation returned");
+      setResult(translated);
+    } catch (e) {
+      console.error("Translation failed:", e);
+      setError("Couldn't translate that — check your internet connection and try again.");
+    }
+    setLoading(false);
+  };
+
+  return (
+    <Sheet onClose={onClose} title="Translator">
+      <div className="flex items-center gap-2 mb-4">
+        <div className="flex-1 grid grid-cols-1 gap-1.5">
+          {TRANSLATE_LANGS.map(l => (
+            <button key={l.code} onClick={() => setFrom(l.code)}
+              className="text-xs font-bold px-3 py-2 rounded-lg border-2 text-left"
+              style={from === l.code ? { background: "#E4EEF7", color: NAVY_SOFT, borderColor: NAVY_SOFT } : { background: "#fff", color: INK, borderColor: LINE }}>
+              {l.label}
+            </button>
+          ))}
+        </div>
+        <button onClick={swapLangs} className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 active:scale-90" style={{ background: "#F5F8F8", border: `1px solid ${LINE}` }} aria-label="Swap languages">
+          <Icon.swap size={16} color={NAVY} />
+        </button>
+        <div className="flex-1 grid grid-cols-1 gap-1.5">
+          {TRANSLATE_LANGS.map(l => (
+            <button key={l.code} onClick={() => setTo(l.code)}
+              className="text-xs font-bold px-3 py-2 rounded-lg border-2 text-left"
+              style={to === l.code ? { background: "#E1F3EC", color: TEAL_DARK, borderColor: TEAL_DARK } : { background: "#fff", color: INK, borderColor: LINE }}>
+              {l.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3}
+        placeholder="Type text to translate…"
+        className="w-full rounded-xl p-3 text-sm mb-3 focus:outline-none" style={{ border: `2px solid ${LINE}` }} />
+
+      <button onClick={translate} disabled={!text.trim() || loading || from === to}
+        className="w-full py-3 rounded-xl text-white font-display font-bold disabled:opacity-40 mb-3" style={{ background: NAVY }}>
+        {loading ? "Translating…" : "Translate"}
+      </button>
+      {from === to && <p className="text-[11px] mb-3" style={{ color: "#B7551E" }}>Pick two different languages.</p>}
+
+      {error && <p className="text-sm text-center py-2" style={{ color: "#B7551E" }}>{error}</p>}
+      {result && (
+        <div className="rounded-xl p-3" style={{ background: "#E1F3EC" }}>
+          <p className="text-sm" style={{ color: INK }}>{result}</p>
+        </div>
+      )}
+      <p className="text-[10px] mt-3" style={{ color: MUTED }}>Machine translation can be imperfect, especially for longer sentences.</p>
     </Sheet>
   );
 }
