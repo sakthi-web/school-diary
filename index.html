@@ -1026,6 +1026,19 @@ function HomeView({ profiles, entriesByProfile, onOpenProfile, onGoDiary, onImpo
             <StudentBoard key={s.profile.id} profile={s.profile} dayData={s.dayData} onOpen={() => onOpenProfile(s.profile.id)} />
           ))}
         </div>
+
+        {/* Reward Gallery */}
+        <div className="bg-white rounded-2xl p-4 mb-5" style={{ border: `1px solid ${LINE}` }}>
+          <p className="font-display font-bold text-sm mb-3" style={{ color: NAVY }}>Reward Gallery</p>
+          {stats.map(s => (
+            <div key={s.profile.id} className="mb-3 last:mb-0">
+              <p className="text-[11px] font-bold mb-2" style={{ color: MUTED }}>{s.profile.name}</p>
+              <div className="flex gap-3 overflow-x-auto pb-1">
+                {BADGES.map(b => <BadgeChip key={b.id} badge={b} unlocked={b.test(s)} />)}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {showDictionary && <DictionarySheet onClose={() => setShowDictionary(false)} />}
