@@ -6,6 +6,7 @@
 <meta name="theme-color" content="#0F2E4C" />
 <title>Kavi & Magi School Diary</title>
 
+<link rel="icon" type="image/webp" href="favicon.webp">
 <link rel="icon" type="image/x-icon" href="favicon.ico">
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
@@ -69,6 +70,17 @@ const { useState, useEffect, useMemo, useRef, useCallback } = React;
 
 /* ============ Brand tokens ============ */
 const NAVY = "#0F2E4C";
+// Public half of the VAPID key pair used for Web Push. Safe to expose client-side —
+// only the matching private key (kept server-side, in the Edge Function's secrets) can sign pushes.
+const VAPID_PUBLIC_KEY = "BPDgkLb9B1YUMkrIb5JOhMHDhRZxP9B9fc4DwUZfQU26aL0oPNoiXQqoegrVi1YhZR7Dd2FdEeylL2qPt_I1giU";
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i++) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+}
 const NAVY_SOFT = "#1B4A73";
 const TEAL = "#1E8F73";
 const TEAL_DARK = "#166B57";
@@ -89,6 +101,13 @@ const SUBJECT_STYLES = {
   GK:        { bg: "#ECE8F7", fg: "#5A3F94", card: "#E2D9F8", cardFg: "#5A3F94" },
   Art:       { bg: "#FCE6EE", fg: "#A32E6B", card: "#FAD3E4", cardFg: "#A32E6B" },
   PE:        { bg: "#E9F3DD", fg: "#4F7A21", card: "#DCEFC4", cardFg: "#4F7A21" },
+  "Value Education": { bg: "#FDECE3", fg: "#B7551E", card: "#FFE3CC", cardFg: "#9A4A18" },
+  Yoga:      { bg: "#E9F3DD", fg: "#4F7A21", card: "#DCEFC4", cardFg: "#4F7A21" },
+  Library:   { bg: "#DFF1F2", fg: "#1E6E77", card: "#C9EDEF", cardFg: "#1E6E77" },
+  AI:        { bg: "#DFF1F2", fg: "#1E6E77", card: "#C9EDEF", cardFg: "#1E6E77" },
+  CLA:       { bg: "#ECE8F7", fg: "#5A3F94", card: "#E2D9F8", cardFg: "#5A3F94" },
+  Music:     { bg: "#FBE6EF", fg: "#A32E6B", card: "#FAD3E4", cardFg: "#A32E6B" },
+  "Tamil/German": { bg: "#FBF1DC", fg: "#8A6300", card: "#FBEAC0", cardFg: "#8A6300" },
   General:   { bg: "#EDEFEF", fg: MUTED, card: "#E7EAEA", cardFg: "#4A5559" },
 };
 const KNOWN_SUBJECTS = Object.keys(SUBJECT_STYLES).filter(s => s !== "General");
@@ -267,6 +286,110 @@ function Avatar({ name, size = 36, color, ring }) {
         boxShadow: ring ? `0 0 0 2.5px #fff, 0 0 0 4.5px ${color || TEAL}` : "none" }}>
       {initials(name)}
     </div>
+  );
+}
+
+/* ============ Push notifications ============ */
+function NotificationsButton({ familyCode }) {
+  const [status, setStatus] = useState("checking"); // checking | unsupported | off | on | denied
+  const [busy, setBusy] = useState(false);
+  const [showSheet, setShowSheet] = useState(false);
+
+  const supported = typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window;
+
+  useEffect(() => {
+    if (!supported) { setStatus("unsupported"); return; }
+    if (Notification.permission === "denied") { setStatus("denied"); return; }
+    navigator.serviceWorker.ready.then((reg) => reg.pushManager.getSubscription()).then((sub) => {
+      setStatus(sub ? "on" : "off");
+    }).catch(() => setStatus("off"));
+  }, [supported]);
+
+  const subscribe = async () => {
+    if (!familyCode) return;
+    setBusy(true);
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") { setStatus(permission === "denied" ? "denied" : "off"); setBusy(false); return; }
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+        });
+      }
+      const json = sub.toJSON();
+      if (sb) {
+        await sb.from("push_subscriptions").upsert({
+          family_code: familyCode,
+          endpoint: json.endpoint,
+          p256dh: json.keys.p256dh,
+          auth: json.keys.auth,
+          device_label: navigator.userAgent.slice(0, 120),
+        }, { onConflict: "endpoint" });
+      }
+      setStatus("on");
+    } catch (e) {
+      console.error("Push subscribe failed:", e);
+    }
+    setBusy(false);
+  };
+
+  const unsubscribe = async () => {
+    setBusy(true);
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        const endpoint = sub.endpoint;
+        await sub.unsubscribe();
+        if (sb) await sb.from("push_subscriptions").delete().eq("endpoint", endpoint);
+      }
+      setStatus("off");
+    } catch (e) {
+      console.error("Push unsubscribe failed:", e);
+    }
+    setBusy(false);
+  };
+
+  if (status === "unsupported" || status === "checking") return null;
+
+  return (
+    <>
+      <button onClick={() => setShowSheet(true)} className="w-10 h-10 rounded-full bg-white/70 flex items-center justify-center active:scale-90 transition relative" aria-label="Notifications">
+        <Icon.bell size={18} color={NAVY} />
+        {status === "on" && <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-[#1E8F73] border-2 border-[#DCF3FA]" />}
+      </button>
+      {showSheet && (
+        <Sheet onClose={() => setShowSheet(false)} title="Task notifications">
+          {status === "denied" ? (
+            <p className="text-sm" style={{ color: MUTED }}>
+              Notifications are blocked for this app in your phone's settings. Enable them from your device's
+              Settings → Apps → Kavi &amp; Magi → Notifications, then come back here.
+            </p>
+          ) : status === "on" ? (
+            <>
+              <p className="text-sm mb-4" style={{ color: INK }}>
+                This device gets a notification whenever a task is added — even if the app is closed.
+              </p>
+              <button onClick={unsubscribe} disabled={busy} className="w-full py-3 rounded-xl text-sm font-bold disabled:opacity-50" style={{ background: "#FBEAC0", color: "#8A6300" }}>
+                {busy ? "Working…" : "Turn off for this device"}
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-sm mb-4" style={{ color: INK }}>
+                Get notified on this device whenever anyone in the family adds a task — even if the app is closed.
+              </p>
+              <button onClick={subscribe} disabled={busy} className="w-full py-3 rounded-xl text-sm font-bold text-white disabled:opacity-50" style={{ background: `linear-gradient(135deg, ${TEAL}, ${TEAL_DARK})` }}>
+                {busy ? "Enabling…" : "Enable notifications"}
+              </button>
+            </>
+          )}
+        </Sheet>
+      )}
+    </>
   );
 }
 
@@ -645,7 +768,7 @@ function App({ familyCode, onChangeFamily }) {
 
       <main className={`relative z-10 flex-1 overflow-y-auto pb-28 max-w-xl w-full mx-auto ${tab === "home" ? "" : "px-4 pt-5"}`}>
         {tab === "home" && (
-          <HomeView profiles={profiles} entriesByProfile={entriesByProfile}
+          <HomeView profiles={profiles} entriesByProfile={entriesByProfile} familyCode={familyCode}
             onOpenProfile={(id) => { setActiveProfileId(id); setTab("today"); }}
             onGoDiary={() => setTab("diary")} onImport={() => setShowImport(true)}
             onMenu={() => setShowProfileSwitcher(true)} onBell={() => setTab("today")} />
@@ -776,22 +899,31 @@ function AttachmentPicker({ familyCode, activeProfileId, attachment, onChange })
 
 function AttachmentChip({ attachment }) {
   const [downloading, setDownloading] = useState(false);
+  const [error, setError] = useState("");
   if (!attachment) return null;
 
   const handleView = () => {
-    // Opens in a new tab. For images/PDFs the browser previews inline;
-    // for Word/Excel files the browser will download it and the device's
-    // own "Open with…" app chooser takes over from there — that's normal
-    // OS behavior for file types browsers can't render themselves.
-    window.open(attachment.url, "_blank", "noopener,noreferrer");
+    setError("");
+    // A real, user-clicked anchor is handled reliably by every mobile browser
+    // and by the Trusted Web Activity PWABuilder generates — more reliable
+    // than window.open(), which some WebViews/TWAs treat as a popup.
+    const a = document.createElement("a");
+    a.href = attachment.url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   };
 
   const handleDownload = async () => {
     setDownloading(true);
+    setError("");
     try {
       // Fetch as a blob so we can force a real download with the original
       // filename, rather than just navigating to the URL.
       const res = await fetch(attachment.url);
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
       const blob = await res.blob();
       const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -802,23 +934,41 @@ function AttachmentChip({ attachment }) {
       a.remove();
       setTimeout(() => URL.revokeObjectURL(blobUrl), 4000);
     } catch (e) {
-      console.error("Download failed, falling back to direct link:", e);
-      window.open(attachment.url, "_blank", "noopener,noreferrer");
+      console.error("Blob download failed, falling back to direct link:", e);
+      // Fallback: a plain download-attribute anchor straight to the file URL.
+      // Works for same-origin/CORS-friendly storage even when the blob fetch
+      // above is blocked; worst case the browser just opens the file instead
+      // of forcing a download, which still gets the user their file.
+      try {
+        const a = document.createElement("a");
+        a.href = attachment.url;
+        a.download = attachment.name;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } catch (e2) {
+        setError("Couldn't download — try View instead.");
+      }
     }
     setDownloading(false);
   };
 
   return (
-    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-      <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-md" style={{ background: fileBadgeColor(attachment.kind), color: INK }}>
-        <Icon.paperclip size={11} /> {attachment.name}
-      </span>
-      <button onClick={handleView} className="text-xs font-bold px-3.5 py-2 rounded-lg transition active:scale-95" style={{ background: NAVY_SOFT, color: "#fff" }}>
-        View
-      </button>
-      <button onClick={handleDownload} disabled={downloading} className="text-xs font-bold px-3.5 py-2 rounded-lg disabled:opacity-50 transition active:scale-95" style={{ background: NAVY_SOFT, color: "#fff" }}>
-        {downloading ? "Downloading…" : "Download"}
-      </button>
+    <div className="mt-1.5">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-md" style={{ background: fileBadgeColor(attachment.kind), color: INK }}>
+          <Icon.paperclip size={11} /> {attachment.name}
+        </span>
+        <button onClick={handleView} className="text-xs font-bold px-3.5 py-2 rounded-lg transition active:scale-95" style={{ background: NAVY_SOFT, color: "#fff" }}>
+          View
+        </button>
+        <button onClick={handleDownload} disabled={downloading} className="text-xs font-bold px-3.5 py-2 rounded-lg disabled:opacity-50 transition active:scale-95" style={{ background: NAVY_SOFT, color: "#fff" }}>
+          {downloading ? "Downloading…" : "Download"}
+        </button>
+      </div>
+      {error && <p className="text-[11px] font-semibold mt-1" style={{ color: "#C0392B" }}>{error}</p>}
     </div>
   );
 }
@@ -903,7 +1053,7 @@ function StudentBoard({ profile, dayData, onOpen }) {
   );
 }
 
-function HomeView({ profiles, entriesByProfile, onOpenProfile, onGoDiary, onImport, onMenu, onBell }) {
+function HomeView({ profiles, entriesByProfile, familyCode, onOpenProfile, onGoDiary, onImport, onMenu, onBell }) {
   const today = todayKey();
   const [showDictionary, setShowDictionary] = useState(false);
   const [showTranslator, setShowTranslator] = useState(false);
@@ -951,6 +1101,7 @@ function HomeView({ profiles, entriesByProfile, onOpenProfile, onGoDiary, onImpo
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            <NotificationsButton familyCode={familyCode} />
             <InstallButton />
             <button onClick={onBell} className="w-10 h-10 rounded-full bg-white/70 flex items-center justify-center active:scale-90 transition relative" aria-label="Reminders">
               <Icon.bell size={19} color={NAVY} />
@@ -1382,6 +1533,93 @@ function ImportSheet({ onClose, onConfirm, defaultDate }) {
   );
 }
 
+/* ============ Kavi's class timetable (PM SHRI KV No.1 AFS Tambaram, VII-C, 2026-27) ============ */
+const TIMETABLE_CLASS = "VII-C";
+const TIMETABLE_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const TIMETABLE_PERIOD_TIMES = {
+  1: "8:50 – 9:30 AM",
+  2: "9:30 – 10:10 AM",
+  3: "10:10 – 10:50 AM",
+  4: "10:50 – 11:30 AM",
+  lunch: "11:30 AM – 12:00 PM",
+  5: "12:00 – 12:40 PM",
+  6: "12:40 – 1:20 PM",
+  7: "1:20 – 2:00 PM",
+  8: "2:00 – 2:40 PM",
+};
+// Each day: periods 1-8 in order (lunch falls between period 4 and 5).
+const KAVI_TIMETABLE = {
+  Mon: ["Sanskrit", "Hindi", "Art", "Science", "Maths", "Library", "SST", "AI"],
+  Tue: ["SST", "Tamil/German", "PE", "Science", "Sanskrit", "Hindi", "Value Education", "Maths"],
+  Wed: ["Value Education", "English", "Yoga", "Science", "SST", "Maths", "CLA", "CLA"],
+  Thu: ["SST", "Sanskrit", "Art", "Science", "English", "Maths", "Maths", "Music"],
+  Fri: ["English", "Science", "English", "SST", "Hindi", "PE", "Maths", "Tamil/German"],
+  Sat: ["Hindi", "SST", "Yoga", "Hindi", "Maths", "English", "AI", "Science"],
+};
+
+function ClassTimetableCard() {
+  const jsDay = new Date().getDay(); // 0=Sun ... 6=Sat
+  const todayAbbr = TIMETABLE_DAYS[jsDay - 1] || null; // null on Sunday
+  const [day, setDay] = useState(todayAbbr || "Mon");
+  const periods = KAVI_TIMETABLE[day];
+
+  return (
+    <div className="mb-6">
+      <div className="rounded-3xl p-5 text-white relative overflow-hidden mb-3" style={{ background: `linear-gradient(135deg, ${NAVY_SOFT}, ${NAVY})`, boxShadow: "0 6px 16px rgba(15,46,76,0.3)" }}>
+        <p className="text-[10px] uppercase tracking-[0.18em] font-bold" style={{ color: "#CFE6F9" }}>📚 Kavi's Timetable</p>
+        <h2 className="font-display font-extrabold text-xl mt-0.5">Class {TIMETABLE_CLASS}</h2>
+        <p className="text-xs mt-1" style={{ color: "#DCEBF7" }}>PM SHRI Kendriya Vidyalaya No.1, AFS Tambaram · 2026-27</p>
+      </div>
+
+      <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1">
+        {TIMETABLE_DAYS.map((d) => (
+          <button key={d} onClick={() => setDay(d)}
+            className="px-3.5 py-1.5 rounded-full text-xs font-bold shrink-0 transition"
+            style={d === day
+              ? { background: NAVY, color: "#fff" }
+              : d === todayAbbr
+              ? { background: "#E1F3EC", color: TEAL_DARK, border: `1.5px solid ${TEAL}` }
+              : { background: "#fff", color: MUTED, border: `1px solid ${LINE}` }}>
+            {d}{d === todayAbbr ? " •" : ""}
+          </button>
+        ))}
+      </div>
+
+      <div className="bg-white rounded-2xl overflow-hidden" style={{ border: `1px solid ${LINE}` }}>
+        {periods.slice(0, 4).map((subj, i) => {
+          const s = styleFor(subj);
+          return (
+            <div key={i} className="flex items-center gap-3 px-3.5 py-2.5" style={{ borderTop: i === 0 ? "none" : `1px solid ${LINE}` }}>
+              <div className="w-8 shrink-0 text-center">
+                <p className="font-display font-extrabold text-xs" style={{ color: MUTED }}>{i + 1}</p>
+              </div>
+              <p className="text-[11px] flex-1" style={{ color: MUTED }}>{TIMETABLE_PERIOD_TIMES[i + 1]}</p>
+              <span className="text-xs font-bold px-2.5 py-1 rounded-full shrink-0" style={{ background: s.card, color: s.cardFg }}>{subj}</span>
+            </div>
+          );
+        })}
+        <div className="flex items-center justify-center gap-2 px-3.5 py-2" style={{ borderTop: `1px solid ${LINE}`, background: PAPER }}>
+          <span className="text-[10px] font-extrabold uppercase tracking-wide" style={{ color: MUTED }}>🍱 Lunch</span>
+          <span className="text-[10px]" style={{ color: MUTED }}>{TIMETABLE_PERIOD_TIMES.lunch}</span>
+        </div>
+        {periods.slice(4, 8).map((subj, i) => {
+          const s = styleFor(subj);
+          const periodNum = i + 5;
+          return (
+            <div key={periodNum} className="flex items-center gap-3 px-3.5 py-2.5" style={{ borderTop: `1px solid ${LINE}` }}>
+              <div className="w-8 shrink-0 text-center">
+                <p className="font-display font-extrabold text-xs" style={{ color: MUTED }}>{periodNum}</p>
+              </div>
+              <p className="text-[11px] flex-1" style={{ color: MUTED }}>{TIMETABLE_PERIOD_TIMES[periodNum]}</p>
+              <span className="text-xs font-bold px-2.5 py-1 rounded-full shrink-0" style={{ background: s.card, color: s.cardFg }}>{subj}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /* ============ Planner tab — annual school holiday planner ============ */
 function PlannerView() {
   const today = todayKey();
@@ -1397,6 +1635,8 @@ function PlannerView() {
 
   return (
     <div>
+      <ClassTimetableCard />
+
       <div className="rounded-3xl p-5 mb-5 text-white relative overflow-hidden" style={{ background: `linear-gradient(135deg, ${TEAL}, ${TEAL_DARK})`, boxShadow: "0 6px 16px rgba(30,143,115,0.3)" }}>
         <p className="text-[10px] uppercase tracking-[0.18em] font-bold" style={{ color: "#CDEEDC" }}>🗓️ Annual Planner</p>
         <h2 className="font-display font-extrabold text-xl mt-0.5">School Year 2026</h2>
